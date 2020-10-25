@@ -1,0 +1,235 @@
+#autoline 10
+#autostart 10
+#program marbles
+
+RUN AT 3
+
+#define BANKPAL=15
+#define BANKSPR=16
+#define BANKTILE=17
+
+#define GRIDSTART=22
+
+#define POINTER=127
+
+#define DEVICE=1
+
+#define MOUSE=1
+#define JOYSTICK=2
+#define KEYBAORD=3
+
+
+%p(#DEVICE)=#KEYBAORD
+
+PROC reset()
+PROC selectInput()
+PROC loadAssets()
+PROC loadBlocks()
+PROC mainLoop()
+
+PAUSE 0
+
+DEFPROC mainLoop()
+  %i=0
+  REPEAT
+    PROC readInput()
+  REPEAT UNTIL 0
+ENDPROC
+
+
+DEFPROC selectInput()
+  RESTORE
+  LAYER 1,1: PRINT CHR$ 30; CHR$ 8
+  PAPER 0: INK 7: BORDER 1
+  CLS
+  DIM j$(7,18)
+
+  FOR i=1 TO 3
+    READ j$(i)
+  NEXT i
+
+  ; settings loop
+  REPEAT
+    PROC printSettings()
+    k$= INKEY$
+    IF k$="1" THEN %p(#DEVICE)=#MOUSE
+    IF k$="2" THEN %p(#DEVICE)=#JOYSTICK
+    IF k$="3" THEN %p(#DEVICE)=#KEYBAORD
+  REPEAT UNTIL k$="0"
+
+  IF %p(#DEVICE)=#MOUSE THEN PROC installMouse(): DRIVER 126,2,#POINTER,12
+  IF %p(#DEVICE) <> #MOUSE THEN PROC installInput(): SPRITE #POINTER,0,0,12,1
+
+  IF %(#DEVICE)=#JOYSTICK THEN DRIVER 125,2,3
+  IF %(#DEVICE)=#KEYBAORD THEN DRIVER 125,2,5
+
+ENDPROC
+
+DEFPROC printSettings()
+  PRINT AT 2,8;"Select your input"
+  FOR %i=1 TO 3
+    j=%i
+    PRINT AT %i+8,7; INVERSE %i=p(#DEVICE);j$(j)
+  NEXT %i
+  INVERSE 0
+  PRINT AT %i+9,7;"0. START!"
+ENDPROC
+
+DEFPROC readInput()
+  IF %p(#DEVICE)=#MOUSE THEN PROC readMouse(): ELSE PROC readJoystick(): ENDPROC
+ENDPROC
+
+DEFPROC readMouse()
+  DRIVER 126,1 TO %b,%x,%y
+  IF %b&@111 THEN PROC selectBlock(%x,%y)
+ENDPROC
+
+DEFPROC readJoystick()
+  DRIVER 125,4,1
+  REM 12345678901234567890123456789012345678901234567890
+ENDPROC
+
+DEFPROC selectBlock()
+  %x=%( SPRITE AT (#POINTER,0)-32) >> 4
+  %y=%( SPRITE AT (#POINTER,1)-32) >> 4
+
+  IF %x > 9 THEN ENDPROC : ; out of scope
+  IF %y > 9 THEN ENDPROC : ; out of scope
+
+  %i=%((y)*10)+(x)
+  PRINT AT 22,0;%x;"/";%y;"    "
+  ;PRINT AT 23,0;%x;"/";%y;"   "
+  IF %i > 99 THEN ENDPROC : ; out of scope
+
+  %b=% BANK #BANKTILE PEEK (#GRIDSTART+i)
+  PRINT AT 23,0;"index: ";%i;", block: ";%b;"    "
+
+;   BANK #BANKTILE POKE %#GRIDSTART+i,%b|16
+  ;TILE 1,1 AT 0,10 TO %x,%y
+ENDPROC
+
+DEFPROC loadBlocks()
+  %n=0
+  REPEAT
+    PROC pickRandom() TO %r
+    PROC toXY(%n) TO %x,%y
+    SPRITE %n+1,%(x*16)+32,%(y*16)+32,%20+(1 << r),1
+    %n=%n+1
+  REPEAT UNTIL %n=100
+ENDPROC
+
+DEFPROC toXY(%n)
+  %x=%n MOD 10
+  %y=%n/10
+ENDPROC =%x,%y
+
+DEFPROC loadBlocksAsTiles()
+  %n=0
+  REPEAT
+    PROC pickRandom() TO %r
+    BANK #BANKTILE POKE %#GRIDSTART+n,%20+(1 << r)
+    %n=%n+1
+  REPEAT UNTIL %n=100
+  BANK #BANKTILE POKE %#GRIDSTART+100,%16
+
+  TILE 10,10 AT 0,0
+ENDPROC
+
+DEFPROC setSeed(%s)
+  BANK 17 DPOKE %1,%r
+ENDPROC
+
+DEFPROC pickRandom()
+  ; default seed is 1 - to change this we need to BANK #BANKTILE DPOKE %1, %<16-bit> - but only during start game
+  %r=% BANK 17 USR 0
+  BANK 17 DPOKE %1,%r
+ENDPROC =%r&3
+
+DEFPROC loadAssets()
+  BORDER 0: PAPER 0: CLS
+  LAYER 2,1
+
+  ; shadow L2 ends at 14, so we start at 15
+  LOAD "assets/marbles.pal" BANK #BANKPAL
+  LAYER PALETTE 0 BANK #BANKPAL,0
+  SPRITE PALETTE 0 BANK #BANKPAL,0
+  ; custom black and white
+  BORDER 0: INK 255: PAPER 254: CLS
+
+  LOAD "assets/marbles.spr" BANK #BANKSPR
+  SPRITE BANK #BANKSPR
+  SPRITE PRINT 1
+  SPRITE BORDER 1
+
+  TILE BANK #BANKSPR
+
+  %i=0
+  REPEAT
+    READ %o
+    BANK 17 POKE %i,%o
+    %i=%i+1
+  REPEAT UNTIL %o=201
+
+;   TILE DIM #BANKTILE,#GRIDSTART,10,16
+ENDPROC
+
+DEFPROC reset()
+  SPRITE PRINT 0
+  SPRITE CLEAR
+  LAYER CLEAR
+  PALETTE CLEAR
+  LAYER 0
+  CLS
+ENDPROC
+
+##########################################
+# Joystick 1 callback procedures
+# - MUST use these exactly procedure names
+##########################################
+DEFPROC U1()
+  %y=% SPRITE AT (#POINTER,1)
+  IF %y > 1 THEN SPRITE #POINTER,,%y-1,,,
+ENDPROC
+DEFPROC L1()
+  %x=% SPRITE AT (#POINTER,0)
+  IF %x > 1 THEN SPRITE #POINTER,%x-1,,,,
+ENDPROC
+DEFPROC D1()
+  %y=% SPRITE AT (#POINTER,1)
+  IF %y < (256-1) THEN SPRITE #POINTER,,%y+1,,,
+ENDPROC
+DEFPROC R1()
+  %x=% SPRITE AT (#POINTER,0)
+  IF %x < (320-1) THEN SPRITE #POINTER,%x+1,,,,
+ENDPROC
+DEFPROC F1()
+  PROC selectBlock()
+ENDPROC
+DEFPROC F2()
+  PROC selectBlock()
+ENDPROC
+DEFPROC F3()
+  PROC selectBlock()
+ENDPROC
+
+DATA "1. Mouse"
+DATA "2. Joystick"
+DATA "3. Keyboard (QAOP)"
+
+; 16-bit xorshift pseudorandom number generator
+DATA 1,1,0,120,31,121,31,168,71,120,31,169,79,168,71,201: ; length: 16
+
+#autoline
+9000 DEFPROC installMouse()
+9010 ON ERROR GO TO 9030
+9020 .uninstall /nextzxos/mouse.drv
+9030 .install /nextzxos/mouse.drv
+9040 ON ERROR
+9050 ENDPROC
+
+9060 DEFPROC installInput()
+9070 ON ERROR GO TO 9090
+9080 .uninstall assets/input.drv
+9090 .install assets/input.drv
+9100 ON ERROR
+9110 ENDPROC
