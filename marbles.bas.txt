@@ -196,24 +196,6 @@ DEFPROC tag(%b,%x,%y)
 
 ENDPROC
 
-DEFPROC selectBlockTile()
-  %x=%( SPRITE AT (#POINTER,0)-32) >> 4
-  %y=%( SPRITE AT (#POINTER,1)-32) >> 4
-
-  IF %x > 9 THEN ENDPROC : ; not in the grid
-  IF %y > 9 THEN ENDPROC : ; not in the grid
-
-  %i=%((y)*10)+(x)
-  PRINT AT 22,0;%x;"/";%y;"    "
-  IF %i > 99 THEN ENDPROC : ; out of scope
-
-;   %b=% BANK #BANKTILE PEEK (#GRIDSTART+i)
-  PRINT AT 23,0;"index: ";%i;", block: ";%b;"    "
-
-;   BANK #BANKTILE POKE %#GRIDSTART+i,%b|16
-  ;TILE 1,1 AT 0,10 TO %x,%y
-ENDPROC
-
 DEFPROC loadBlocks()
 
   PROC setSeed(1)
@@ -333,11 +315,6 @@ ENDPROC
 
 ; 16-bit xorshift pseudorandom number generator
 DATA 1,1,0,120,31,121,31,168,71,120,31,169,79,168,71,201: ; length: 16
-
-; DATA "1. Mouse"
-; DATA "2. Joystick"
-; DATA "3. Keyboard (QAOP)"
-;
 
 #autoline
 9000 DEFPROC installMouse()
