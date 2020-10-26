@@ -18,12 +18,11 @@ RUN AT 3
 #define JOYSTICK=2
 #define KEYBAORD=3
 
-
 %p(#DEVICE)=#KEYBAORD
 
 PROC reset()
-PROC selectInput()
 PROC loadAssets()
+PROC selectInput()
 PROC loadBlocks()
 PROC mainLoop()
 
@@ -33,21 +32,24 @@ DEFPROC mainLoop()
   %i=0
   REPEAT
     PROC readInput()
+    IF INKEY$ ="r" THEN PROC loadBlocks()
   REPEAT UNTIL 0
 ENDPROC
 
 
 DEFPROC selectInput()
-  RESTORE
-  LAYER 1,1: PRINT CHR$ 30; CHR$ 8
-  PAPER 0: INK 7: BORDER 1
+  ;RESTORE
+;   LAYER 1,1: PRINT CHR$ 2:
+;   LAYER 2,1: PRINT CHR$ 30; CHR$ 8
+  PAPER 254: INK 255: BORDER 0
   CLS
-  DIM j$(7,18)
-
-  FOR i=1 TO 3
-    READ j$(i)
-  NEXT i
-
+;   DIM j$(7,18)
+;
+;   FOR i=1 TO 3
+;     READ j$(i)
+;   NEXT i
+;
+;  TODO uncomment
   ; settings loop
   REPEAT
     PROC printSettings()
@@ -63,10 +65,18 @@ DEFPROC selectInput()
   IF %(#DEVICE)=#JOYSTICK THEN DRIVER 125,2,3
   IF %(#DEVICE)=#KEYBAORD THEN DRIVER 125,2,5
 
+  CLS
+;   LAYER 2,1
+
 ENDPROC
 
 DEFPROC printSettings()
   PRINT AT 2,8;"Select your input"
+  DIM j$(3,18)
+  j$(1)="1. Mouse"
+  j$(2)="2. Joystick"
+  j$(3)="3. Keyboard (QAOP)"
+
   FOR %i=1 TO 3
     j=%i
     PRINT AT %i+8,7; INVERSE %i=p(#DEVICE);j$(j)
@@ -90,18 +100,114 @@ DEFPROC readJoystick()
 ENDPROC
 
 DEFPROC selectBlock()
+  %i=%( SPRITE OVER (#POINTER,0 TO 99))
+
+  IF %i > 99 THEN ENDPROC : ; out of scope
+
+  %x=%( SPRITE AT (i,0)-32) >> 4
+  %y=%( SPRITE AT (i,1)-48) >> 4
+  %b=%( SPRITE AT (i,2))-20: ; manual offset
+
+  ;PRINT AT 22,0;"index: ";%i;" @ x/y:";%x;"/";%y;", block: ";%b;"    "
+
+  IF %a[i]=0 THEN ENDPROC : ; empty block
+
+  %c=0
+  %c[c]=-1
+
+  PROC tag(%b,%x,%y)
+
+  IF %c < 2 THEN ENDPROC
+
+  PRINT AT 1,21;"BLOCKS ";%c
+
+  ; remove the selected blocks
+  FOR %i=%0 TO %c
+    SPRITE %c[i],,,20,
+    %a[i]=0
+  NEXT %i
+
+  ;PRINT AT 23,0;"block: ";%b;", count: ";%c;"   "
+  FOR %j=%0 TO %c
+    %b=%c[j]
+    %x=%b MOD 10
+    %y=%(b/10)
+
+    ; use y to cycle upwards and remove blocks
+    PROC clearColumn(%b,%x,%y)
+  NEXT %j
+ENDPROC
+
+DEFPROC clearColumn(%i,%x,%y)
+  REPEAT
+    %y=%y-1
+
+    %t=%(10*y)+x
+
+    WHILE %y < 10: ; break (this is actually -1)
+
+    ; skip if block is empty
+    IF %a[t] THEN PROC clearColumnSwap()
+
+    ; swap the block value
+    %i=%t
+  REPEAT UNTIL 0
+ENDPROC
+
+; mutate values
+DEFPROC clearColumnSwap()
+  %a=%a[i]
+  %a[i]=%a[t]
+  SPRITE %i,,,%a[t]+20,
+  %a[t]=%a
+  SPRITE %t,,,%a+20,
+ENDPROC
+
+DEFPROC tag(%b,%x,%y)
+
+  IF %x > 9 THEN ENDPROC
+  IF %y > 9 THEN ENDPROC
+
+  %i=%(10*y)+x
+
+  ;PRINT AT 21,0;"                    "
+
+  IF %i > 99 THEN ENDPROC : ; out of bounds
+  IF %b <> a[i] THEN ENDPROC : ; not a match
+
+  %j=%0
+  %t=%0
+
+  ; array.includes?
+  REPEAT
+    IF %c THEN IF %c[j]=i THEN %t=%1
+    %j=%j+1
+  REPEAT UNTIL %(j >= c) OR (t=1)
+  IF %t THEN ENDPROC
+
+  %c[c]=%i
+  %c=%c+1
+
+  ; now search for more
+  PROC tag(%b,%x-1,%y)
+  PROC tag(%b,%x+1,%y)
+  PROC tag(%b,%x,%y-1)
+  PROC tag(%b,%x,%y+1)
+
+ENDPROC
+
+DEFPROC selectBlockTile()
   %x=%( SPRITE AT (#POINTER,0)-32) >> 4
   %y=%( SPRITE AT (#POINTER,1)-32) >> 4
 
-  IF %x > 9 THEN ENDPROC : ; out of scope
-  IF %y > 9 THEN ENDPROC : ; out of scope
+  IF %x > 9 THEN ENDPROC : ; not in the grid
+  IF %y > 9 THEN ENDPROC : ; not in the grid
 
   %i=%((y)*10)+(x)
   PRINT AT 22,0;%x;"/";%y;"    "
-  ;PRINT AT 23,0;%x;"/";%y;"   "
   IF %i > 99 THEN ENDPROC : ; out of scope
 
-  %b=% BANK #BANKTILE PEEK (#GRIDSTART+i)
+;   %b=% BANK #BANKTILE PEEK (#GRIDSTART+i)
   PRINT AT 23,0;"index: ";%i;", block: ";%b;"    "
 
 ;   BANK #BANKTILE POKE %#GRIDSTART+i,%b|16
@@ -109,11 +215,15 @@ DEFPROC selectBlock()
 ENDPROC
 
 DEFPROC loadBlocks()
+
+  PROC setSeed(1)
+
   %n=0
   REPEAT
     PROC pickRandom() TO %r
     PROC toXY(%n) TO %x,%y
-    SPRITE %n+1,%(x*16)+32,%(y*16)+32,%20+(1 << r),1
+    SPRITE %n,%(x*16)+32,%(y*16)+48,%20+(1 << r),1
+    %a[n]=%1 << r
     %n=%n+1
   REPEAT UNTIL %n=100
 ENDPROC
@@ -136,8 +246,16 @@ DEFPROC loadBlocksAsTiles()
 ENDPROC
 
 DEFPROC setSeed(%s)
-  BANK 17 DPOKE %1,%r
+  BANK 17 DPOKE %1,%s
+  PROC pad(%s) TO s$
+  PRINT AT 0,21;"SEED ";s$;%s
 ENDPROC
+
+DEFPROC pad(%w)
+  IF %w < 10 THEN ENDPROC ="000"
+  IF %w < 100 THEN ENDPROC ="00"
+  IF %w < 1000 THEN ENDPROC ="0"
+ENDPROC =""
 
 DEFPROC pickRandom()
   ; default seed is 1 - to change this we need to BANK #BANKTILE DPOKE %1, %<16-bit> - but only during start game
@@ -147,7 +265,10 @@ ENDPROC =%r&3
 
 DEFPROC loadAssets()
   BORDER 0: PAPER 0: CLS
+  LOAD "./assets/font.bin" CODE 64000
+  DPOKE 23606,63744: ; 64000-256 (256 = 8 * 32 control chars)
   LAYER 2,1
+  PRINT CHR$ 2: ; trigger the font to be loaded on layer 2
 
   ; shadow L2 ends at 14, so we start at 15
   LOAD "assets/marbles.pal" BANK #BANKPAL
@@ -169,8 +290,6 @@ DEFPROC loadAssets()
     BANK 17 POKE %i,%o
     %i=%i+1
   REPEAT UNTIL %o=201
-
-;   TILE DIM #BANKTILE,#GRIDSTART,10,16
 ENDPROC
 
 DEFPROC reset()
@@ -212,12 +331,13 @@ DEFPROC F3()
   PROC selectBlock()
 ENDPROC
 
-DATA "1. Mouse"
-DATA "2. Joystick"
-DATA "3. Keyboard (QAOP)"
-
 ; 16-bit xorshift pseudorandom number generator
 DATA 1,1,0,120,31,121,31,168,71,120,31,169,79,168,71,201: ; length: 16
+
+; DATA "1. Mouse"
+; DATA "2. Joystick"
+; DATA "3. Keyboard (QAOP)"
+;
 
 #autoline
 9000 DEFPROC installMouse()
