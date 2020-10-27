@@ -19,6 +19,10 @@ RUN AT 3
 #define JOYSTICK=2
 #define KEYBAORD=3
 
+#define XMIN=0
+#define XMAX=1
+#define YMIN=2
+
 %p(#DEVICE)=#KEYBAORD
 %p(#SCORE)=0
 
@@ -120,17 +124,27 @@ DEFPROC selectBlock()
   %p(#SCORE)=%p(#SCORE)+(c*(5+c))
   PRINT AT 3,21;"SCORE ";%p(#SCORE)
 
+  ; this helps me calculate the area to move blocks - which means less itterations
+  %z(#XMIN)=9
+  %z(#XMAX)=0
+  %z(#YMIN)=0
   ; remove the selected blocks
   FOR %i=%0 TO %(c-1)
     SPRITE %c[i],,,20,
-;     PRINT AT 0,21;"V:";%c[i];"  "s
     %a[c[i]]=0
+
+    PROC toXY(%c[i]) TO %x,%y
+    IF %x < z(#XMIN) THEN %z(#XMIN)=%x
+    IF %x > z(#XMAX) THEN %z(#XMAX)=%x
+    IF %y > z(#YMIN) THEN %z(#YMIN)=%y
   NEXT %i
 
+  %x=%z(#XMIN)
+  %z(#XMAX)=%z(#XMAX)+1
+;   %z(#YMIN)=%z(#YMIN)-1
   ; marginly faster than doing a FOR x TO loop
-  %x=0
-  REPEAT : WHILE %x <> 10
-    %y=9
+  REPEAT : WHILE %x <> z(#XMAX)
+    %y=%z(#YMIN)
     REPEAT : WHILE %y <> -1
       %i=%(10*y)+x
       %f=0
