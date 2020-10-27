@@ -119,10 +119,11 @@ DEFPROC selectBlock()
 
   IF %c < 2 THEN ENDPROC
 
-  PRINT AT 1,21;"BLOCKS ";%c
-
+  INK 50
+  PRINT AT 20,21;"BLOCKS ";%c
+  INK 255
   %p(#SCORE)=%p(#SCORE)+(c*(5+c))
-  PRINT AT 3,21;"SCORE ";%p(#SCORE)
+  PRINT AT 21,21;"SCORE ";%p(#SCORE);""
 
   ; this helps me calculate the area to move blocks - which means less itterations
   %z(#XMIN)=9
@@ -141,14 +142,12 @@ DEFPROC selectBlock()
 
   %x=%z(#XMIN)
   %z(#XMAX)=%z(#XMAX)+1
-;   %z(#YMIN)=%z(#YMIN)-1
   ; marginly faster than doing a FOR x TO loop
   REPEAT : WHILE %x <> z(#XMAX)
     %y=%z(#YMIN)
     REPEAT : WHILE %y <> -1
       %i=%(10*y)+x
-      %f=0
-      IF %a[i]=0 THEN PROC clearColumn(%i,%x,%y) TO %f: IF %f THEN %y=%y+1
+      IF %a[i]=0 THEN PROC clearColumn(%i,%x,%y):%y=0: ; IF %f THEN %y=%y+1
       %y=%y-1
     REPEAT UNTIL 0
     %x=%x+1
@@ -156,37 +155,33 @@ DEFPROC selectBlock()
 ENDPROC
 
 DEFPROC clearColumn(%i,%x,%y)
-;   PRINT AT 2,21;"CLS ";%i;"/";%x;",";%y
-  %f=0
+;   SPRITE %i,,,1,1
   REPEAT
     %y=%y-1
-
     %t=%(10*y)+x
 
-    WHILE %y <> -1: ; break (this is actually -1)
+    WHILE %y <> -1: ; break
 
-;     PRINT AT 3,21;"YT:";%y;"/";%t;":";%a[t];"  "
+    ; if we hit a block, then swap it's position
+    IF %a[t] THEN PROC clearColumnSwap()
+
 ;     PROC onAnyKey()
-;     PRINT AT 3,21;"                            "
-
-    ; skip if block is empty
-    IF %a[t] THEN PROC clearColumnSwap():%f=1
-
-    ; swap the block value
-    %i=%t
   REPEAT UNTIL 0
-;   PRINT AT 4,21;"                      "
-ENDPROC =%f
+ENDPROC
 
 ; mutate values
 DEFPROC clearColumnSwap()
 ;   PRINT AT 4,21;"SWAP ";%i;"-";%t;" "
+
+  ; swap the blocks at %i and %t
   %a=%a[i]
   %a[i]=%a[t]
   SPRITE %i,,,%a[t]+20,
   %a[t]=%a
   SPRITE %t,,,%a+20,
-; PROC onAnyKey()
+
+  ; cycle to the block directly above
+  %i=%i-10
 ENDPROC
 
 DEFPROC tag(%b,%x,%y)
@@ -222,9 +217,25 @@ DEFPROC tag(%b,%x,%y)
 
 ENDPROC
 
+; param {int} %i
+; returns {string} hex string
+; uses: %j, h$, r$, p
+DEFPROC toHex(%i)
+  %j=4: ; symbols (2 bytes = 4 symbols)
+  h$="0123456789abcdef"
+  r$=""
+  REPEAT : WHILE %j <> 0
+    %j=%j-1
+    p=%(i&$f)+1
+    r$=h$(p)+r$
+    %i=%i >> 4
+  REPEAT UNTIL 0
+ENDPROC =r$
+
 DEFPROC loadBlocks()
   %p(#SCORE)=0
-  PROC setSeed(1): ; FIXME this is a test
+  PRINT AT 21,21;"SCORE 0     "
+  PROC setSeed(%$f01d): ; FIXME this is a test
 
   %n=0
   REPEAT
@@ -249,14 +260,13 @@ ENDPROC =%x,%y
 
 DEFPROC setSeed(%s)
   BANK 17 DPOKE %1,%s
-;   PROC pad(%s) TO s$
-  PRINT AT 0,21;"SEED ";%s
+  PROC toHex(%s) TO s$
+  PRINT AT 2,21;"SEED ";s$
 ENDPROC
 
 DEFPROC pad(%w)
-  IF %w < 10 THEN ENDPROC ="000"
-  IF %w < 100 THEN ENDPROC ="00"
-  IF %w < 1000 THEN ENDPROC ="0"
+  IF %w < 10 THEN ENDPROC ="  "
+  IF %w < 100 THEN ENDPROC =" "
 ENDPROC =""
 
 DEFPROC onAnyKey()
