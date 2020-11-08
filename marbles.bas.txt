@@ -17,6 +17,7 @@ RUN AT 3
 #define BUSY=3
 #define BLOCKSLEFT=4
 #define BEST=5
+#define THEME=6
 
 #define MOUSE=1
 #define JOYSTICK=2
@@ -28,6 +29,7 @@ RUN AT 3
 
 %p(#DEVICE)=#KEYBAORD
 %p(#SCORE)=0
+%p(#THEME)=20
 %p(#BEST)=1036
 
 PROC reset()
@@ -49,7 +51,6 @@ ENDPROC
 
 DEFPROC selectInput()
   PAPER 254: INK 255: BORDER 0
-;   CLS
   LOAD "assets/welcome.nxi" LAYER
 
   ; settings loop
@@ -109,7 +110,7 @@ DEFPROC selectBlock()
 
   %x=%( SPRITE AT (i,0)-32) >> 4
   %y=%( SPRITE AT (i,1)-48) >> 4
-  %b=%( SPRITE AT (i,2)): ; manual offset
+  %b=%( SPRITE AT (i,2))-p(#THEME): ; manual offset
 
   ;PRINT AT 22,0;"index: ";%i;" @ x/y:";%x;"/";%y;", block: ";%b;"    "
 
@@ -190,9 +191,9 @@ DEFPROC shiftColumn(%x,%z)
 
     %a=%a[i]
     %a[i]=%a[j]
-    SPRITE %i,,,%a[j],
+    SPRITE %i,,,%a[j]+p(#THEME),
     %a[j]=%a
-    SPRITE %j,,,%a,
+    SPRITE %j,,,%a+p(#THEME),
 
     %y=%y+1
   REPEAT UNTIL 0
@@ -200,7 +201,6 @@ DEFPROC shiftColumn(%x,%z)
 ENDPROC
 
 DEFPROC clearColumn(%i,%x,%y)
-;   SPRITE %i,,,1,1
   REPEAT
     %y=%y-1
     %t=%(10*y)+x
@@ -213,7 +213,6 @@ DEFPROC clearColumn(%i,%x,%y)
     ; allow UI to tick
     PROC readInput()
 
-
 ;     PROC onAnyKey()
   REPEAT UNTIL 0
 ENDPROC
@@ -225,9 +224,9 @@ DEFPROC clearColumnSwap()
   ; swap the blocks at %i and %t
   %a=%a[i]
   %a[i]=%a[t]
-  SPRITE %i,,,%a[t],
+  SPRITE %i,,,%a[t]+p(#THEME),
   %a[t]=%a
-  SPRITE %t,,,%a,
+  SPRITE %t,,,%a+p(#THEME),
 
   ; cycle to the block directly above
   %i=%i-10
@@ -301,7 +300,7 @@ DEFPROC loadBlocks()
   REPEAT
     PROC pickRandom() TO %r
     PROC toXY(%n) TO %x,%y
-    SPRITE %n,%(x*16)+32,%(y*16)+48,%(1 << r),0
+    SPRITE %n,%(x*16)+32,%(y*16)+48,%(1 << r)+p(#THEME),0
     %a[n]=%1 << r
     %n=%n+1
   REPEAT UNTIL %n=100
