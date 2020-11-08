@@ -14,6 +14,9 @@ RUN AT 3
 
 #define DEVICE=1
 #define SCORE=2
+#define BUSY=3
+#define BLOCKSLEFT=4
+#define BEST=5
 
 #define MOUSE=1
 #define JOYSTICK=2
@@ -25,6 +28,7 @@ RUN AT 3
 
 %p(#DEVICE)=#KEYBAORD
 %p(#SCORE)=0
+%p(#BEST)=1036
 
 PROC reset()
 PROC loadAssets()
@@ -44,21 +48,19 @@ ENDPROC
 
 
 DEFPROC selectInput()
-  ;RESTORE
-;   LAYER 1,1: PRINT CHR$ 2:
-;   LAYER 2,1: PRINT CHR$ 30; CHR$ 8
   PAPER 254: INK 255: BORDER 0
-  CLS
-;  TODO uncomment
+;   CLS
+  LOAD "assets/welcome.nxi" LAYER
+
   ; settings loop
-;   REPEAT
-;     PROC printSettings()
-;     k$= INKEY$
-;     IF k$="1" THEN %p(#DEVICE)=#MOUSE
-;     IF k$="2" THEN %p(#DEVICE)=#JOYSTICK
-;     IF k$="3" THEN %p(#DEVICE)=#KEYBAORD
-;   REPEAT UNTIL k$="0"
-;
+  PROC printSettings()
+  REPEAT
+    k$= INKEY$
+    IF k$="1" THEN %p(#DEVICE)=#MOUSE: PROC printSettings()
+    IF k$="2" THEN %p(#DEVICE)=#JOYSTICK: PROC printSettings()
+    IF k$="3" THEN %p(#DEVICE)=#KEYBAORD: PROC printSettings()
+  REPEAT UNTIL k$="0"
+
   IF %p(#DEVICE)=#MOUSE THEN PROC installMouse(): DRIVER 126,2,#POINTER,12
   IF %p(#DEVICE) <> #MOUSE THEN PROC installInput(): SPRITE #POINTER,96,72,12,1
 
@@ -66,12 +68,10 @@ DEFPROC selectInput()
   IF %(#DEVICE)=#KEYBAORD THEN DRIVER 125,2,5
 
   CLS
-;   LAYER 2,1
-
 ENDPROC
 
 DEFPROC printSettings()
-  PRINT AT 2,8;"Select your input"
+  PRINT AT 5,8;"Select your input"
   DIM j$(3,18)
   j$(1)="1. Mouse"
   j$(2)="2. Joystick"
@@ -79,10 +79,10 @@ DEFPROC printSettings()
 
   FOR %i=1 TO 3
     j=%i
-    PRINT AT %i+8,7; INVERSE %i=p(#DEVICE);j$(j)
+    PRINT AT %(i*2)+8,7; INVERSE %i=p(#DEVICE);j$(j)
   NEXT %i
   INVERSE 0
-  PRINT AT %i+9,7;"0. START!"
+  PRINT AT %i+13,7;"0. START!"
 ENDPROC
 
 DEFPROC readInput()
@@ -100,30 +100,39 @@ DEFPROC readJoystick()
 ENDPROC
 
 DEFPROC selectBlock()
+  IF %p(#BUSY) THEN ENDPROC
+  %p(#BUSY)=1
+
   %i=%( SPRITE OVER (#POINTER,0 TO 99))
 
-  IF %i > 99 THEN ENDPROC : ; out of scope
+  IF %i > 99 THEN %p(#BUSY)=0: ENDPROC : ; out of scope
 
   %x=%( SPRITE AT (i,0)-32) >> 4
   %y=%( SPRITE AT (i,1)-48) >> 4
-  %b=%( SPRITE AT (i,2))-20: ; manual offset
+  %b=%( SPRITE AT (i,2)): ; manual offset
 
   ;PRINT AT 22,0;"index: ";%i;" @ x/y:";%x;"/";%y;", block: ";%b;"    "
 
-  IF %a[i]=0 THEN ENDPROC : ; empty block
+  IF %a[i]=0 THEN %p(#BUSY)=0: ENDPROC : ; empty block
 
   %c=0
   %c[c]=-1
 
   PROC tag(%b,%x,%y)
 
-  IF %c < 2 THEN ENDPROC
+  IF %c < 2 THEN %p(#BUSY)=0: ENDPROC
+
+  %p(#BLOCKSLEFT)=%p(#BLOCKSLEFT)-c
+  %p(#SCORE)=%p(#SCORE)+(c*(5+c))
 
   INK 50
-  PRINT AT 20,21;"BLOCKS ";%c
+  PROC pad2(%c) TO s$
+  PRINT AT 3,21;"CLEARED ";s$;%c
+  PROC pad2(%p(#BLOCKSLEFT)) TO s$
+  PRINT AT 4,21;"REMAIN  ";s$;%p(#BLOCKSLEFT)
   INK 255
-  %p(#SCORE)=%p(#SCORE)+(c*(5+c))
-  PRINT AT 21,21;"SCORE ";%p(#SCORE);""
+  PROC pad4(%p(#SCORE)) TO s$
+  PRINT AT 2,21;"SCORE ";s$;%p(#SCORE);""
 
   ; this helps me calculate the area to move blocks - which means less itterations
   %z(#XMIN)=9
@@ -131,13 +140,16 @@ DEFPROC selectBlock()
   %z(#YMIN)=0
   ; remove the selected blocks
   FOR %i=%0 TO %(c-1)
-    SPRITE %c[i],,,20,
+    SPRITE %c[i],,,0,
     %a[c[i]]=0
 
     PROC toXY(%c[i]) TO %x,%y
     IF %x < z(#XMIN) THEN %z(#XMIN)=%x
     IF %x > z(#XMAX) THEN %z(#XMAX)=%x
     IF %y > z(#YMIN) THEN %z(#YMIN)=%y
+
+    ; allow UI to tick
+    PROC readInput()
   NEXT %i
 
   %x=%z(#XMIN)
@@ -148,10 +160,43 @@ DEFPROC selectBlock()
     REPEAT : WHILE %y <> -1
       %i=%(10*y)+x
       IF %a[i]=0 THEN PROC clearColumn(%i,%x,%y):%y=0: ; IF %f THEN %y=%y+1
+
+      ; allow UI to tick
+      PROC readInput()
+
       %y=%y-1
     REPEAT UNTIL 0
     %x=%x+1
   REPEAT UNTIL 0
+
+  ; now collapse the columns
+  %x=%z(#XMIN)
+  %z=%0
+  REPEAT : WHILE %x <> 10
+    %i=%90+x
+    IF %a[i]=0 THEN %z=%x: ELSE : IF %z THEN PROC shiftColumn(%x,%z):%z=0:%x=0
+    %x=%x+1
+  REPEAT UNTIL 0
+
+  %p(#BUSY)=0
+ENDPROC
+
+DEFPROC shiftColumn(%x,%z)
+  %y=%0
+  REPEAT : WHILE %y < 10
+    %a=%10*y
+    %i=%a+x: ; left
+    %j=%a+z: ; right
+
+    %a=%a[i]
+    %a[i]=%a[j]
+    SPRITE %i,,,%a[j],
+    %a[j]=%a
+    SPRITE %j,,,%a,
+
+    %y=%y+1
+  REPEAT UNTIL 0
+
 ENDPROC
 
 DEFPROC clearColumn(%i,%x,%y)
@@ -165,6 +210,10 @@ DEFPROC clearColumn(%i,%x,%y)
     ; if we hit a block, then swap it's position
     IF %a[t] THEN PROC clearColumnSwap()
 
+    ; allow UI to tick
+    PROC readInput()
+
+
 ;     PROC onAnyKey()
   REPEAT UNTIL 0
 ENDPROC
@@ -176,9 +225,9 @@ DEFPROC clearColumnSwap()
   ; swap the blocks at %i and %t
   %a=%a[i]
   %a[i]=%a[t]
-  SPRITE %i,,,%a[t]+20,
+  SPRITE %i,,,%a[t],
   %a[t]=%a
-  SPRITE %t,,,%a+20,
+  SPRITE %t,,,%a,
 
   ; cycle to the block directly above
   %i=%i-10
@@ -202,14 +251,24 @@ DEFPROC tag(%b,%x,%y)
   ; array.includes?
   REPEAT
     IF %c THEN IF %c[j]=i THEN %t=%1
+    ; allow UI to tick
+    PROC readInput()
     %j=%j+1
   REPEAT UNTIL %(j >= c) OR (t=1)
   IF %t THEN ENDPROC
 
   %c[c]=%i
+
+  IF %c THEN SPRITE %c[c],,,0,
+  IF %c=1 THEN SPRITE %c[0],,,0,
+
   %c=%c+1
 
-  ; now search for more
+
+  ; allow UI to tick
+  PROC readInput()
+
+; now search for more
   PROC tag(%b,%x-1,%y)
   PROC tag(%b,%x+1,%y)
   PROC tag(%b,%x,%y-1)
@@ -234,14 +293,15 @@ ENDPROC =r$
 
 DEFPROC loadBlocks()
   %p(#SCORE)=0
-  PRINT AT 21,21;"SCORE 0     "
-  PROC setSeed(%$f01d): ; FIXME this is a test
+  %p(#BLOCKSLEFT)=100
+  PRINT AT 2,21;"SCORE    0"
+  PROC setSeed(%1+ RND $ffff): ; FIXME this is a test
 
   %n=0
   REPEAT
     PROC pickRandom() TO %r
     PROC toXY(%n) TO %x,%y
-    SPRITE %n,%(x*16)+32,%(y*16)+48,%20+(1 << r),0
+    SPRITE %n,%(x*16)+32,%(y*16)+48,%(1 << r),0
     %a[n]=%1 << r
     %n=%n+1
   REPEAT UNTIL %n=100
@@ -261,12 +321,21 @@ ENDPROC =%x,%y
 DEFPROC setSeed(%s)
   BANK 17 DPOKE %1,%s
   PROC toHex(%s) TO s$
-  PRINT AT 2,21;"SEED ";s$
+  INK 50
+  PRINT AT 7,21;"SEED #";s$
+  INK 255
+  PROC pad4(%p(#BEST)) TO s$
+  PRINT AT 6,21;"BEST  ";s$;%p(#BEST)
 ENDPROC
 
-DEFPROC pad(%w)
-  IF %w < 10 THEN ENDPROC ="  "
-  IF %w < 100 THEN ENDPROC =" "
+DEFPROC pad4(%w)
+  IF %w < 10 THEN ENDPROC ="   "
+  IF %w < 100 THEN ENDPROC ="  "
+  IF %w < 1000 THEN ENDPROC =" "
+ENDPROC =""
+
+DEFPROC pad2(%w)
+  IF %w < 10 THEN ENDPROC =" "
 ENDPROC =""
 
 DEFPROC onAnyKey()
@@ -326,18 +395,22 @@ ENDPROC
 # - MUST use these exactly procedure names
 ##########################################
 DEFPROC U1()
+  LOCAL %y
   %y=% SPRITE AT (#POINTER,1)
   IF %y > 1 THEN SPRITE #POINTER,,%y-1,,,
 ENDPROC
 DEFPROC L1()
+  LOCAL %x
   %x=% SPRITE AT (#POINTER,0)
   IF %x > 1 THEN SPRITE #POINTER,%x-1,,,,
 ENDPROC
 DEFPROC D1()
+  LOCAL %y
   %y=% SPRITE AT (#POINTER,1)
   IF %y < (256-1) THEN SPRITE #POINTER,,%y+1,,,
 ENDPROC
 DEFPROC R1()
+  LOCAL %x
   %x=% SPRITE AT (#POINTER,0)
   IF %x < (320-1) THEN SPRITE #POINTER,%x+1,,,,
 ENDPROC
@@ -352,7 +425,8 @@ DEFPROC F3()
 ENDPROC
 
 ; 16-bit xorshift pseudorandom number generator
-DATA 1,1,0,120,31,121,31,168,71,120,31,169,79,168,71,201: ; length: 16
+; ld bc,1 : ld a,b: rra: ld a,c: rra: xor b: ld b,a: ld a,c: rra: ld a,b: rra: xor c: ld c,a: xor b: ld b,a: ret
+DATA 1,1,0,120,31,121,31,168,71,121,31,120,31,169,79,168,71,201: ; length: 18
 
 #autoline
 9000 DEFPROC installMouse()
