@@ -1,0 +1,133 @@
+#program nettest
+#autoline 10
+
+# Useful reading here https://gitlab.com/thesmog358/tbblue/-/blob/master/docs/extra-hw/wifi/ESPATreadme.TXT
+
+CLEAR 40959
+RUN AT 3
+LAYER 1,2
+BORDER 0: PAPER 0: INK 7
+PROC closeChannels()
+LET %n=78: LET %p=0: LET %b=20: LET %t=0
+PROC testConnection()
+ON ERROR
+BANK 21 ERASE 0,512,%$ea
+PROC tcpconnect("18.134.205.210",8080)
+; PROC send("hello world")
+PROC sendbank(21,0,256)
+; PROC postBank(21,0,256)
+PRINT "FIN"
+PAUSE 0
+PROC closeChannels()
+STOP
+
+DEFPROC send(a$)
+  PRINT "sending data",a$
+  PRINT #7;a$+ CHR$ (13)+ CHR$ (10);
+  PRINT #7; CHR$ (13)+ CHR$ (10);
+  INPUT #7, LINE b$
+  PRINT b$
+  DRIVER 78,3,128 TO %f,%i,%o: REM will clear flags - I'm not entirely sure why I need this
+  PRINT "done?"
+ENDPROC
+
+; %n - bank id
+; %o - offset=0
+; %l - length=16384
+DEFPROC sendbank(%n,%o,%l)
+  PRINT "reading ";%l*2;" bytes"
+;   LET r$= BANK %n PEEK$ (%o,%l)
+  REPEAT
+    d=% BANK n DPEEK o
+    %o=%o+2
+    ; chunk the data into 128 byte blocks (though it's marginally more as it's sent as strings)
+    IF %o&63=0 OR (o >= l) THEN PRINT #7; STR$ (d)+ CHR$ (13)+ CHR$ (10): ELSE : PRINT #7; STR$ (d)+",";
+  REPEAT UNTIL %o >= l
+  PRINT "sending eol"
+
+  PRINT #7; CHR$ (13)+ CHR$ (10)
+
+  INPUT #7, LINE b$
+  PRINT b$
+  DRIVER 78,3,128 TO %f,%i,%o: REM will clear flags - I'm not entirely sure why I need this
+ENDPROC
+
+DEFPROC postBank(%n,%o,l)
+  PROC write("POST / HTTP/1.0")
+  PROC write("Content-Length: "+ STR$ (l))
+  PROC write("Content-Type: application/x-www-form-urlencoded")
+  PROC write("")
+  PROC write("b=")
+
+  REPEAT
+    d=% BANK n DPEEK o
+    %o=%o+2
+    IF %o&63=0 OR (o >= l) THEN PRINT #7; PROC write( STR$ (d)): ELSE : PRINT #7; STR$ (d)+",";
+  REPEAT UNTIL %o >= l
+
+ENDPROC
+
+DEFPROC write(s$)
+  PRINT #7,s$+ CHR$ (13)+ CHR$ (10)
+ENDPROC
+
+# standard operations
+
+DEFPROC closeChannels()
+  ON ERROR
+  CLOSE # 15: ; connection test channel
+  CLOSE # 7: ; comms channel
+ENDPROC
+
+REM See if we can open network if not install drivers
+DEFPROC testConnection()
+  ON ERROR PROC connect()
+  PRINT "testing driver connection..."
+  OPEN # 15,"D>N": ; "N" is the driver id - the charCode for 78
+  ON ERROR
+  PRINT "driver connected"
+ENDPROC
+
+DEFPROC connect()
+  ERROR TO e,l,s
+  PRINT "staring connect logic: e:";e;" l:";l;", s";s
+  ON ERROR
+  PROC installDrivers()
+  DRIVER %n,1,%p: REM 0 to allocate main memory, patch and initialise
+  BANK %b ERASE
+  PRINT "Allocating 1 buffer ";%b
+  DRIVER %n,6,%b: ; "Add 16K bank to IPD receive pool"
+  DRIVER %n,9,0 TO %p: PRINT "115K Baud - prescaler ";%p: ; "Specific UART BAUD rate to be set from lookup table"
+  DRIVER %n,3: PRINT "IPD Driver started": ; "Get CMD or IPD channel values"
+ENDPROC
+
+DEFPROC tcpconnect(n$,p)
+  ON ERROR PROC waitTry()
+  PRINT "open ";n$;":"; STR$ (p)
+  OPEN # 7,"D>N>TCP,"+n$+","+ STR$ (p)
+  DRIVER 78,10,1,0: REM set 256/CR buffer mode
+  ON ERROR
+ENDPROC
+
+DEFPROC waitTry()
+  ERROR TO err,l
+  ON ERROR
+  IF err <> 15 THEN PRINT "Error ";err;", line: ";l: STOP
+  PRINT "Retrying tcp connect"
+  %t=%t+1
+  IF %t > 3 THEN PRINT "Bailing retry": STOP
+ENDPROC
+
+#autoline
+
+9000 DEFPROC installDrivers()
+9010 ON ERROR GO TO 9030
+9020 .uninstall /nextos/espat.drv
+9030 PRINT "now installing"
+9040 ON ERROR GO TO 9070
+9050 .install /nextzxos/espat.drv
+9060 PRINT "Installed ESPAT.DRV"
+9070 PRINT "ESPAT.SYS Load page ";%p
+9080 LOAD "/nextzxos/espat.sys" CODE 40960: REM IN main memory
+9090 ON ERROR
+9100 ENDPROC
