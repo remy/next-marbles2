@@ -2,15 +2,30 @@
 #autostart 10
 #program marbles
 
+;-------------------------------------------------------------------------------
+; VARIABLES
+;
+; %a[] - complete virtual grid of blocks and state
+; %c[] - collected blocks when selection is made
+; %p() - player state
+;
+; BUGS
+; - [ ] If col 0 is empty it'll remain empty
+;-------------------------------------------------------------------------------
+
 RUN AT 3
 
 #define BANKPAL=15
 #define BANKSPR=16
-#define BANKTILE=17
+#define BANKRND=17
+#define BANKNEXTLEVEL=18
+#define BANKPLOT=19
 
 #define GRIDSTART=22
 
 #define POINTER=127
+#define POINTERSPR=63
+#define COUNTER=126
 
 #define DEVICE=1
 #define SCORE=2
@@ -18,10 +33,15 @@ RUN AT 3
 #define BLOCKSLEFT=4
 #define BEST=5
 #define THEME=6
+#define PLOTPTR=7
+#define SEED=8
+#define LEVEL=9
 
 #define MOUSE=1
 #define JOYSTICK=2
 #define KEYBAORD=3
+
+#define EMPTY=4
 
 #define XMIN=0
 #define XMAX=1
@@ -29,13 +49,15 @@ RUN AT 3
 
 %p(#DEVICE)=#KEYBAORD
 %p(#SCORE)=0
-%p(#THEME)=20
+%p(#THEME)=%1*5: ; or 2
+%p(#SEED)=%$13b2
 %p(#BEST)=1036
 
 PROC reset()
 PROC loadAssets()
 PROC selectInput()
-PROC loadBlocks()
+PROC replayGame()
+
 PROC mainLoop()
 
 PAUSE 0
@@ -44,10 +66,31 @@ DEFPROC mainLoop()
   %i=0
   REPEAT
     PROC readInput()
-    IF INKEY$ ="r" THEN PROC loadBlocks()
+    IF INKEY$ ="r" THEN PROC replayGame()
+    IF INKEY$ ="n" THEN PROC newGame()
   REPEAT UNTIL 0
 ENDPROC
 
+DEFPROC nextLevel()
+  %p(#LEVEL)=%p(#LEVEL)+1
+  ; show Next Level box
+  BANK #BANKNEXTLEVEL COPY TO 10
+
+  ; FIXME test why the sprites aren't rendering over the layer even though it has priority on the palette
+  SPRITE #COUNTER,97,113,58,1, BIN 0,1,1
+  SPRITE #COUNTER-1,97,113,62,1, BIN 0,1,1: ; put a sprite under the countdown that's solid white, just in case we hide the counter before we clear the screen
+  SPRITE CONTINUE #COUNTER, STOP , STOP ,58 TO 61, BIN 01100000,60,60: ; count down effect
+
+  REPEAT
+    SPRITE MOVE INT
+  REPEAT UNTIL % SPRITE #COUNTER=0
+
+  SPRITE #COUNTER-1,,,,0: ; remove the backing sprite
+
+  CLS
+  PROC printSeed()
+  PROC loadBlocks()
+ENDPROC
 
 DEFPROC selectInput()
   PAPER 254: INK 255: BORDER 0
@@ -55,15 +98,19 @@ DEFPROC selectInput()
 
   ; settings loop
   PROC printSettings()
+  LET start=0
   REPEAT
     k$= INKEY$
     IF k$="1" THEN %p(#DEVICE)=#MOUSE: PROC printSettings()
     IF k$="2" THEN %p(#DEVICE)=#JOYSTICK: PROC printSettings()
     IF k$="3" THEN %p(#DEVICE)=#KEYBAORD: PROC printSettings()
-  REPEAT UNTIL k$="0"
 
-  IF %p(#DEVICE)=#MOUSE THEN PROC installMouse(): DRIVER 126,2,#POINTER,12
-  IF %p(#DEVICE) <> #MOUSE THEN PROC installInput(): SPRITE #POINTER,96,72,12,1
+    IF k$="0" THEN start=1
+    IF % IN 31=16 THEN %p(#DEVICE)=#JOYSTICK:start=1
+  REPEAT UNTIL start=1
+
+  IF %p(#DEVICE)=#MOUSE THEN PROC installMouse(): DRIVER 126,2,#POINTER,#POINTERSPR
+  IF %p(#DEVICE) <> #MOUSE THEN PROC installInput(): SPRITE #POINTER,96,72,#POINTERSPR,1
 
   IF %(#DEVICE)=#JOYSTICK THEN DRIVER 125,2,3
   IF %(#DEVICE)=#KEYBAORD THEN DRIVER 125,2,5
@@ -104,7 +151,7 @@ DEFPROC selectBlock()
   IF %p(#BUSY) THEN ENDPROC
   %p(#BUSY)=1
 
-  %i=%( SPRITE OVER (#POINTER,0 TO 99))
+  %i=%( SPRITE OVER (#POINTER,0 TO 99)): ; which block are we over when we selected
 
   IF %i > 99 THEN %p(#BUSY)=0: ENDPROC : ; out of scope
 
@@ -112,16 +159,17 @@ DEFPROC selectBlock()
   %y=%( SPRITE AT (i,1)-48) >> 4
   %b=%( SPRITE AT (i,2))-p(#THEME): ; manual offset
 
-  ;PRINT AT 22,0;"index: ";%i;" @ x/y:";%x;"/";%y;", block: ";%b;"    "
+  IF %a[i]=#EMPTY THEN %p(#BUSY)=0: ENDPROC : ; empty block
 
-  IF %a[i]=0 THEN %p(#BUSY)=0: ENDPROC : ; empty block
-
-  %c=0
-  %c[c]=-1
+  %c=0: ; c is the pointer in the %c[] array
+  %c[c]=-1: ; %c[] is the collected blocks taggged
 
   PROC tag(%b,%x,%y)
 
   IF %c < 2 THEN %p(#BUSY)=0: ENDPROC
+
+  BANK #BANKPLOT POKE %p(#PLOTPTR),%c[0]
+  %p(#PLOTPTR)=%p(#PLOTPTR)+1
 
   %p(#BLOCKSLEFT)=%p(#BLOCKSLEFT)-c
   %p(#SCORE)=%p(#SCORE)+(c*(5+c))
@@ -133,7 +181,7 @@ DEFPROC selectBlock()
   PRINT AT 4,21;"REMAIN  ";s$;%p(#BLOCKSLEFT)
   INK 255
   PROC pad4(%p(#SCORE)) TO s$
-  PRINT AT 2,21;"SCORE ";s$;%p(#SCORE);""
+  PRINT AT 2,21;"SCORE ";s$;%p(#SCORE)
 
   ; this helps me calculate the area to move blocks - which means less itterations
   %z(#XMIN)=9
@@ -141,8 +189,8 @@ DEFPROC selectBlock()
   %z(#YMIN)=0
   ; remove the selected blocks
   FOR %i=%0 TO %(c-1)
-    SPRITE %c[i],,,0,
-    %a[c[i]]=0
+;     SPRITE %c[i],,,55,
+    %a[c[i]]=#EMPTY
 
     PROC toXY(%c[i]) TO %x,%y
     IF %x < z(#XMIN) THEN %z(#XMIN)=%x
@@ -160,7 +208,7 @@ DEFPROC selectBlock()
     %y=%z(#YMIN)
     REPEAT : WHILE %y <> -1
       %i=%(10*y)+x
-      IF %a[i]=0 THEN PROC clearColumn(%i,%x,%y):%y=0: ; IF %f THEN %y=%y+1
+      IF %a[i]=#EMPTY THEN PROC clearColumn(%i,%x,%y):%y=0: ; IF %f THEN %y=%y+1
 
       ; allow UI to tick
       PROC readInput()
@@ -172,12 +220,14 @@ DEFPROC selectBlock()
 
   ; now collapse the columns
   %x=%z(#XMIN)
-  %z=%0
+  %z=%-1
   REPEAT : WHILE %x <> 10
     %i=%90+x
-    IF %a[i]=0 THEN %z=%x: ELSE : IF %z THEN PROC shiftColumn(%x,%z):%z=0:%x=0
+    IF %a[i]=#EMPTY THEN %z=%x: ELSE : IF %z <> -1 THEN PROC shiftColumn(%x,%z):%z=%-1:%x=0
     %x=%x+1
   REPEAT UNTIL 0
+
+  IF %p(#BLOCKSLEFT)=0 THEN PROC nextLevel()
 
   %p(#BUSY)=0
 ENDPROC
@@ -195,6 +245,8 @@ DEFPROC shiftColumn(%x,%z)
     %a[j]=%a
     SPRITE %j,,,%a+p(#THEME),
 
+    PROC readInput()
+
     %y=%y+1
   REPEAT UNTIL 0
 
@@ -208,19 +260,15 @@ DEFPROC clearColumn(%i,%x,%y)
     WHILE %y <> -1: ; break
 
     ; if we hit a block, then swap it's position
-    IF %a[t] THEN PROC clearColumnSwap()
+    IF %a[t] <> #EMPTY THEN PROC clearColumnSwap()
 
     ; allow UI to tick
     PROC readInput()
-
-;     PROC onAnyKey()
   REPEAT UNTIL 0
 ENDPROC
 
 ; mutate values
 DEFPROC clearColumnSwap()
-;   PRINT AT 4,21;"SWAP ";%i;"-";%t;" "
-
   ; swap the blocks at %i and %t
   %a=%a[i]
   %a[i]=%a[t]
@@ -239,8 +287,6 @@ DEFPROC tag(%b,%x,%y)
 
   %i=%(10*y)+x
 
-  ;PRINT AT 21,0;"                    "
-
   IF %i > 99 THEN ENDPROC : ; out of bounds
   IF %b <> a[i] THEN ENDPROC : ; not a match
 
@@ -258,16 +304,16 @@ DEFPROC tag(%b,%x,%y)
 
   %c[c]=%i
 
-  IF %c THEN SPRITE %c[c],,,0,
-  IF %c=1 THEN SPRITE %c[0],,,0,
+  ; remove the sprites as we find them (so long as we find 2 or more)
+  IF %c THEN SPRITE %c[c],,,#EMPTY,
+  IF %c=1 THEN SPRITE %c[0],,,#EMPTY,
 
   %c=%c+1
-
 
   ; allow UI to tick
   PROC readInput()
 
-; now search for more
+  ; now search for more
   PROC tag(%b,%x-1,%y)
   PROC tag(%b,%x+1,%y)
   PROC tag(%b,%x,%y-1)
@@ -290,18 +336,40 @@ DEFPROC toHex(%i)
   REPEAT UNTIL 0
 ENDPROC =r$
 
-DEFPROC loadBlocks()
+DEFPROC startGame(%s)
+  %p(#LEVEL)=1
   %p(#SCORE)=0
+  %p(#PLOTPTR)=0
+  BANK #BANKPLOT ERASE
+  PROC setSeed(%s)
+  PROC loadBlocks()
+ENDPROC
+
+DEFPROC replayGame()
+  PROC startGame(%p(#SEED))
+ENDPROC
+
+DEFPROC newGame()
+  PROC startGame(%1+ RND $fffe)
+ENDPROC
+
+DEFPROC loadBlocks()
   %p(#BLOCKSLEFT)=100
-  PRINT AT 2,21;"SCORE    0"
-  PROC setSeed(%1+ RND $ffff): ; FIXME this is a test
+
+  INK 50
+  PRINT AT 3,21;"CLEARED   0"
+  PRINT AT 4,21;"REMAIN  100"
+  INK 255
+  PRINT AT 2,21;"SCORE     0"
+  PROC pad4(%p(#LEVEL)) TO s$
+  PRINT AT 6,21;"LEVEL ";s$;%p(#LEVEL)
 
   %n=0
   REPEAT
     PROC pickRandom() TO %r
     PROC toXY(%n) TO %x,%y
-    SPRITE %n,%(x*16)+32,%(y*16)+48,%(1 << r)+p(#THEME),0
-    %a[n]=%1 << r
+    SPRITE %n,%(x*16)+32,%(y*16)+48,%r+p(#THEME),0
+    %a[n]=%r
     %n=%n+1
   REPEAT UNTIL %n=100
 
@@ -312,29 +380,51 @@ DEFPROC loadBlocks()
   REPEAT UNTIL %n=100
 ENDPROC
 
+DEFPROC testRnd()
+  LAYER 2,1
+  CLEAR
+  CLS
+
+  SPRITE PRINT 0
+  %n=0
+  REPEAT
+    PROC pickRandom() TO %r
+    PRINT %r
+    %n=%n+1
+  REPEAT UNTIL %n=100
+
+ENDPROC
+
 DEFPROC toXY(%n)
   %x=%n MOD 10
   %y=%n/10
 ENDPROC =%x,%y
 
 DEFPROC setSeed(%s)
-  BANK 17 DPOKE %1,%s
+  BANK #BANKRND DPOKE %1,%s
+  %p(#SEED)=%s
+  PROC printSeed()
+ENDPROC
+
+DEFPROC printSeed()
+  %s=%p(#SEED)
   PROC toHex(%s) TO s$
   INK 50
-  PRINT AT 7,21;"SEED #";s$
-  INK 255
+  PRINT AT 7,21;"SEED  #";s$
   PROC pad4(%p(#BEST)) TO s$
-  PRINT AT 6,21;"BEST  ";s$;%p(#BEST)
+  PRINT AT 8,21;"BEST  ";s$;%p(#BEST)
 ENDPROC
 
 DEFPROC pad4(%w)
-  IF %w < 10 THEN ENDPROC ="   "
-  IF %w < 100 THEN ENDPROC ="  "
-  IF %w < 1000 THEN ENDPROC =" "
+  IF %w < 10 THEN ENDPROC ="    "
+  IF %w < 100 THEN ENDPROC ="   "
+  IF %w < 1000 THEN ENDPROC ="  "
+  IF %w < 10000 THEN ENDPROC =" "
 ENDPROC =""
 
 DEFPROC pad2(%w)
-  IF %w < 10 THEN ENDPROC =" "
+  IF %w < 10 THEN ENDPROC ="  "
+  IF %w < 100 THEN ENDPROC =" "
 ENDPROC =""
 
 DEFPROC onAnyKey()
@@ -346,9 +436,9 @@ DEFPROC onAnyKey()
 ENDPROC
 
 DEFPROC pickRandom()
-  ; default seed is 1 - to change this we need to BANK #BANKTILE DPOKE %1, %<16-bit> - but only during start game
-  %r=% BANK 17 USR 0
-  BANK 17 DPOKE %1,%r
+  ; default seed is 1 - to change this we need to BANK #BANKRND DPOKE %1, %<16-bit> - but only during start game
+  %r=% BANK #BANKRND USR 0
+  BANK #BANKRND DPOKE %1,%r
 ENDPROC =%r&3
 
 DEFPROC loadAssets()
@@ -357,6 +447,8 @@ DEFPROC loadAssets()
   DPOKE 23606,63744: ; 64000-256 (256 = 8 * 32 control chars)
   LAYER 2,1
   PRINT CHR$ 2: ; trigger the font to be loaded on layer 2
+
+  LOAD "assets/over-next-level.bin" BANK #BANKNEXTLEVEL
 
   ; shadow L2 ends at 14, so we start at 15
   LOAD "assets/marbles.pal" BANK #BANKPAL
@@ -370,12 +462,12 @@ DEFPROC loadAssets()
   SPRITE PRINT 1
   SPRITE BORDER 1
 
-  TILE BANK #BANKSPR
+  POKE 23658,0: ; turn off CAPS LOCK (for menu items)
 
   %i=0
   REPEAT
     READ %o
-    BANK 17 POKE %i,%o
+    BANK #BANKRND POKE %i,%o
     %i=%i+1
   REPEAT UNTIL %o=201
 ENDPROC
