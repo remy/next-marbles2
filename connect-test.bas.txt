@@ -13,23 +13,11 @@ PROC testConnection()
 ON ERROR
 BANK 21 ERASE 0,512,%$ea
 PROC tcpconnect("18.134.205.210",8080)
-; PROC send("hello world")
 PROC sendbank(21,0,256)
-; PROC postBank(21,0,256)
 PRINT "FIN"
 PAUSE 0
 PROC closeChannels()
 STOP
-
-DEFPROC send(a$)
-  PRINT "sending data",a$
-  PRINT #7;a$+ CHR$ (13)+ CHR$ (10);
-  PRINT #7; CHR$ (13)+ CHR$ (10);
-  INPUT #7, LINE b$
-  PRINT b$
-  DRIVER 78,3,128 TO %f,%i,%o: REM will clear flags - I'm not entirely sure why I need this
-  PRINT "done?"
-ENDPROC
 
 ; %n - bank id
 ; %o - offset=0
@@ -50,21 +38,6 @@ DEFPROC sendbank(%n,%o,%l)
   INPUT #7, LINE b$
   PRINT b$
   DRIVER 78,3,128 TO %f,%i,%o: REM will clear flags - I'm not entirely sure why I need this
-ENDPROC
-
-DEFPROC postBank(%n,%o,l)
-  PROC write("POST / HTTP/1.0")
-  PROC write("Content-Length: "+ STR$ (l))
-  PROC write("Content-Type: application/x-www-form-urlencoded")
-  PROC write("")
-  PROC write("b=")
-
-  REPEAT
-    d=% BANK n DPEEK o
-    %o=%o+2
-    IF %o&63=0 OR (o >= l) THEN PRINT #7; PROC write( STR$ (d)): ELSE : PRINT #7; STR$ (d)+",";
-  REPEAT UNTIL %o >= l
-
 ENDPROC
 
 DEFPROC write(s$)

@@ -20,6 +20,10 @@ RUN AT 3
 #define BANKRND=17
 #define BANKNEXTLEVEL=18
 #define BANKPLOT=19
+#define BANKGFX=20
+
+#define OFFSETRESTART=0
+#define OFFSETNEWLEVEL=1309
 
 #define GRIDSTART=22
 
@@ -50,7 +54,7 @@ RUN AT 3
 %p(#DEVICE)=#KEYBAORD
 %p(#SCORE)=0
 %p(#THEME)=%1*5: ; or 2
-%p(#SEED)=%$13b2
+%p(#SEED)=%1
 %p(#BEST)=1036
 
 PROC reset()
@@ -449,6 +453,8 @@ DEFPROC loadAssets()
   PRINT CHR$ 2: ; trigger the font to be loaded on layer 2
 
   LOAD "assets/over-next-level.bin" BANK #BANKNEXTLEVEL
+  LOAD "assets/restart.nxi" BANK #BANKGFX,#OFFSETRESTART,1309
+  LOAD "assets/new-level.nxi" BANK #BANKGFX,#OFFSETNEWLEVEL,1309
 
   ; shadow L2 ends at 14, so we start at 15
   LOAD "assets/marbles.pal" BANK #BANKPAL

@@ -1,0 +1,24 @@
+#autoline 10
+
+; rst 16 demo
+
+%i=0
+; REPEAT
+;   READ %o
+;   BANK 20 POKE %i,%o
+;   %i=%i+1
+; REPEAT UNTIL %o=201
+;
+
+CLEAR 39999
+POKE 40000,62,65,221,1,215,201
+%r= USR 40000
+; ;
+; A starts at $51E0
+;
+; BANK 20 POKE 0,62,65,221,1,215,201
+; a=% BANK 20 USR 0
+;
+; PRINT AT 8,8;"done"
+
+PAUSE 0

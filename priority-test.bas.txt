@@ -1,0 +1,33 @@
+#autoline 10
+#program priority
+; priority test
+
+RUN AT 3
+
+LAYER 2,1
+
+; palette: (priority) red, magenta, yellow, (non priority) white, black
+BANK 15 DPOKE 0,32992,33255,33020,511,0
+
+BANK 16 ERASE 0,256,0: ; block 1 - red
+BANK 16 ERASE 256,256,1: ; block 2 - magenta
+BANK 16 ERASE 512,256,2: ; block 3 - yellow
+BANK 16 ERASE 768,256,3: ; block 4 - white
+
+SPRITE PALETTE 0 BANK 15,0
+LAYER PALETTE 0 BANK 15,0
+
+SPRITE BANK 16
+SPRITE PRINT 1
+
+INK 4: PAPER 3: CLS
+
+PRINT "Spicy jalapeno bacon ipsum dolor amet picanha meatball jowl frankfurter leberkas, burgdoggen bacon chuck sausage andouille. Rump picanha pig corned beef meatball jowl. Boudin tail cow frankfurter hamburger meatloaf flank shank pastrami turducken biltong pork chop short ribs pork belly andouille. Turducken ball tip ribeye drumstick jowl ground round. Pork belly ham jowl kielbasa ball tip alcatra venison, biltong burgdoggen pork chop chuck."
+
+SPRITE 0,64,64,0,1,0,2,2: ; priority sprite paint
+
+LAYER ERASE 64,70,40,40,1: ; priority magenta
+
+SPRITE 1,70,90,2,1,0,1,1: ; priority sprite paint yellow
+
+PAUSE 0

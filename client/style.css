@@ -1,0 +1,15 @@
+body {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: black;
+}
+
+canvas {
+  display: block;
+  width: min(80vh, 80vw);
+  /* height: 384px; */
+  background: black;
+  image-rendering: pixelated;
+}
