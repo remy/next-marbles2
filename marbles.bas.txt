@@ -8,9 +8,8 @@
 ; %a[] - complete virtual grid of blocks and state
 ; %c[] - collected blocks when selection is made
 ; %p() - player state
+; i$   - input key
 ;
-; BUGS
-; - [ ] If col 0 is empty it'll remain empty
 ;-------------------------------------------------------------------------------
 
 RUN AT 3
@@ -22,26 +21,29 @@ ON ERROR GO TO 9200
 #define BANKRND=17
 #define BANKNEXTLEVEL=18
 #define BANKPLOT=19
-#define BANKGFX=20
-#define BANKLIB=21
+#define BANKLIB=20
 #define BANKDEBUG=0
+#define BANKGFX_A=22
+#define BANKGFX_B=23
+
+; bank graphic offsets
+#define OFFSET_BUTTONS=0
+#define OFFSET_NEW_GAME_BOX=5120
+#define OFFSET_NEXT_LEVEL=11840
+#define OFFSET_GAME_OVER=0
 
 ; entry points in the marbles.bin library for methods and method constants
-#define M_POPULATEGRID=437
-#define M_RANDOMSEED=417
-#define M_TAG=481
-#define M_TAGINDEX=482
-
-#define OFFSETRESTART=0
-#define OFFSETNEWLEVEL=1309
-#define OFFSETBUTTONS=2618
-
-#define GRIDSTART=22
+#define M_CANMOVE=432
+#define M_RANDOMSEED=434
+#define M_FN_POPULATEGRID=454
+#define M_TAGINDEX=499
+#define M_FN_TAG=498
 
 #define POINTER=127
 #define POINTERSPR=63
 #define COUNTER=126
 
+; user state
 #define DEVICE=1
 #define SCORE=2
 #define BUSY=3
@@ -51,6 +53,7 @@ ON ERROR GO TO 9200
 #define PLOTPTR=7
 #define SEED=8
 #define LEVEL=9
+#define LOAD_PATTERN=10
 
 #define MOUSE=1
 #define JOYSTICK=2
@@ -58,15 +61,11 @@ ON ERROR GO TO 9200
 
 #define EMPTY=4
 
-#define XMIN=0
-#define XMAX=1
-#define YMIN=2
-
 %p(#DEVICE)=#KEYBAORD
 %p(#SCORE)=0
-%p(#THEME)=%1*5: ; or 2
-%p(#SEED)=%$8f7a
-%p(#BEST)=1036
+%p(#THEME)=%1*5: ; or 2*5
+%p(#SEED)=%$1
+%p(#BEST)=0
 
 PROC reset()
 PROC loadAssets()
@@ -81,8 +80,8 @@ DEFPROC mainLoop()
   %i=0
   REPEAT
     PROC readInput()
-    IF INKEY$ ="r" THEN PROC replayGame()
-    IF INKEY$ ="n" THEN PROC newGame()
+    IF i$="r" THEN PROC replayGame()
+    IF i$="n" THEN PROC newGame()
   REPEAT UNTIL 0
 ENDPROC
 
@@ -149,6 +148,7 @@ DEFPROC printSettings()
 ENDPROC
 
 DEFPROC readInput()
+  i$= INKEY$
   IF %p(#DEVICE)=#MOUSE THEN PROC readMouse(): ELSE PROC readJoystick(): ENDPROC
 ENDPROC
 
@@ -182,13 +182,14 @@ ENDPROC
 ; Uses: %c, %i, %t
 ; Modifies: %p
 DEFPROC selectBlock()
+  IF %p(#BUSY) THEN ENDPROC
 
   %p(#BUSY)=1
 
   ; load %i into tagIndex
   BANK #BANKLIB POKE #M_TAGINDEX,%i
   ; call Tag()
-  %t=% BANK #BANKLIB USR #M_TAG
+  %t=% BANK #BANKLIB USR #M_FN_TAG
 
   ; %t contains the address of the number of blocks tagged
   %c=% BANK #BANKLIB PEEK t
@@ -200,13 +201,11 @@ DEFPROC selectBlock()
   BANK #BANKPLOT POKE %p(#PLOTPTR),%i: ; store the block cleared
   %p(#PLOTPTR)=%p(#PLOTPTR)+1
 
+  IF %p(#SCORE) > p(#BEST) THEN %p(#BEST)=%p(#SCORE)
+
   ; clear the tagged blocks
-  %x=9
-  %y=9
   FOR %i=1 TO %c
     SPRITE % BANK #BANKLIB PEEK (t+i),,,#EMPTY,
-    %j=%i MOD 10
-    IF %j < x THEN %x=j
   NEXT %i
 
   INK 50
@@ -214,8 +213,8 @@ DEFPROC selectBlock()
   PRINT AT 3,21;"CLEARED ";s$;%c
   PROC pad2(%p(#PLOTPTR)) TO s$
   PRINT AT 4,21;"MOVES   ";s$;%p(#PLOTPTR)
-  PROC pad2(%p(#BLOCKSLEFT)) TO s$
-  PRINT AT 5,21;"REMAIN  ";s$;%p(#BLOCKSLEFT)
+;   PROC pad2(%p(#BLOCKSLEFT)) TO s$
+;   PRINT AT 5,21;"REMAIN  ";s$;%p(#BLOCKSLEFT)
   INK 255
   PROC pad4(%p(#SCORE)) TO s$
   PRINT AT 2,21;"SCORE ";s$;%p(#SCORE)
@@ -233,6 +232,26 @@ DEFPROC selectBlock()
   REPEAT UNTIL %c=0
 
   %p(#BUSY)=0
+
+  IF %p(#BLOCKSLEFT)=0 THEN PROC nextLevel()
+
+  IF %( BANK #BANKLIB PEEK #M_CANMOVE)=0 THEN %p(#BUSY)=1: PAUSE 10: PROC gameOver()
+
+ENDPROC
+
+DEFPROC gameOver()
+  %z=0
+  i$=""
+  REPEAT
+;     PROC readInput()
+    BANK #BANKGFX_B LAYER %(2560*z) TO 6,22,20,2
+    PAUSE 5
+    %z=%(z+1) MOD 4
+    i$= INKEY$
+  REPEAT UNTIL (i$="r") OR (i$="n") OR (i$="e")
+
+  ; clear the section that showed game over
+  BANK 11 ERASE 12288,4096,0
 
 ENDPROC
 
@@ -252,26 +271,41 @@ DEFPROC toHex(%i)
 ENDPROC =r$
 
 DEFPROC startGame(%s)
+  SPRITE PRINT 0
   %p(#LEVEL)=1
   %p(#SCORE)=0
+  %p(#BUSY)=0
   BANK #BANKPLOT ERASE
   BANK #BANKPLOT DPOKE 0,%s: ; first 16bit word is the seed
   %p(#PLOTPTR)=2
   PROC setSeed(%s)
-  PROC loadBlocks()
 
-  IF #BANKDEBUG=0 THEN ENDPROC
+  ; clear any blocks already on the board
+  %c=100
+  REPEAT
+    %c=%c-1
+    %i=% BANK #BANKLIB PEEK c
+    IF %i < 255 THEN SPRITE %c,,,,0: ; only clear them if they're visible
+  REPEAT UNTIL %c=0
+
+  SPRITE PRINT 1
+
+  IF #BANKDEBUG=0 THEN PROC loadBlocks(): ENDPROC
 
   ; DEBUG - repeat a game sequence
-  LOAD "./CRASH-2.BIN" BANK #BANKDEBUG
+  LOAD "./BLOCKED.BIN" BANK #BANKDEBUG
 
+  %i=% BANK #BANKDEBUG DPEEK 0
+  PROC setSeed(%i)
 
+  PROC loadBlocks()
 
   %j=2
   REPEAT
     %i=% BANK #BANKDEBUG PEEK j
     WHILE %i <> 255
     PROC selectBlock()
+    PAUSE %2+(i MOD 5)
     %j=%j+1
   REPEAT UNTIL 0
 ENDPROC
@@ -290,21 +324,23 @@ DEFPROC loadBlocks()
   INK 50
   PRINT AT 3,21;"CLEARED   0"
   PRINT AT 4,21;"MOVES     0"
-  PRINT AT 5,21;"REMAIN  100"
+;   PRINT AT 5,21;"REMAIN  100"£
   INK 255
   PRINT AT 2,21;"SCORE     0"
   PROC pad4(%p(#LEVEL)) TO s$
   PRINT AT 7,21;"LEVEL ";s$;%p(#LEVEL)
 
-  BANK #BANKGFX LAYER #OFFSETBUTTONS TO 22,14,10,8
+  BANK #BANKGFX_A LAYER #OFFSET_BUTTONS TO 22,14,10,8
 
   ; call PopulateGrid
-  %n=% BANK #BANKLIB USR #M_POPULATEGRID
+  %n=% BANK #BANKLIB USR #M_FN_POPULATEGRID
+
+  IF %p(#LOAD_PATTERN)=6 THEN RESTORE :%p(#LOAD_PATTERN)=0
+  %p(#LOAD_PATTERN)=%p(#LOAD_PATTERN)+1
 
   ; this uses a predefined order to render the blocks in a circle which makes
   ; for a nice effect
   %n=100
-  RESTORE
   REPEAT
     %n=%n-1
     READ %j
@@ -312,7 +348,7 @@ DEFPROC loadBlocks()
     PROC toXY(%j) TO %x,%y
     SPRITE %j,%(x*16)+32,%(y*16)+48,%r+p(#THEME),1
     %a[j]=%r
-    PAUSE 1
+    IF %n > 50 THEN PAUSE 1
   REPEAT UNTIL %n=0
 ENDPROC
 
@@ -364,9 +400,12 @@ DEFPROC loadAssets()
   PRINT CHR$ 2: ; trigger the font to be loaded on layer 2
 
   LOAD "assets/over-next-level.bin" BANK #BANKNEXTLEVEL
-  LOAD "assets/restart.nxi" BANK #BANKGFX,#OFFSETRESTART,1309
-  LOAD "assets/new-level.nxi" BANK #BANKGFX,#OFFSETNEWLEVEL,1309
-  LOAD "assets/buttons.nxi" BANK #BANKGFX,#OFFSETBUTTONS,5120
+  LOAD "assets/buttons.nxi" BANK #BANKGFX_A,#OFFSET_BUTTONS,5120
+  LOAD "assets/new-game.nxi" BANK #BANKGFX_A,#OFFSET_NEW_GAME_BOX,6720
+  LOAD "assets/next-level-in-simple.nxi" BANK #BANKGFX_A,#OFFSET_NEXT_LEVEL,3840: ; sum = 15680
+  LOAD "assets/game-over.nxi" BANK #BANKGFX_B,#OFFSET_GAME_OVER,10240
+
+  ; marbles library
   LOAD "assets/marbles.bin" BANK #BANKLIB
 
   ; shadow L2 ends at 14, so we start at 15
@@ -433,7 +472,23 @@ DEFPROC onAnyKey()
   REPEAT : REPEAT UNTIL INKEY$ =""
 ENDPROC
 
+; inside out
 DATA 54,55,45,44,43,53,63,64,65,66,56,46,36,35,34,33,32,42,52,62,72,73,74,75,76,77,67,57,47,37,27,26,25,24,23,22,21,31,41,51,61,71,81,82,83,84,85,86,87,88,78,68,58,48,38,28,18,17,16,15,14,13,12,11,10,20,30,40,50,60,70,80,90,91,92,93,94,95,96,97,98,99,89,79,69,59,49,39,29,19,9,8,7,6,5,4,3,2,1,0
+
+; zig zag
+DATA 90,91,92,93,94,95,96,97,98,99,89,88,87,86,85,84,83,82,81,80,70,71,72,73,74,75,76,77,78,79,69,68,67,66,65,64,63,62,61,60,50,51,52,53,54,55,56,57,58,59,49,48,47,46,45,44,43,42,41,40,30,31,32,33,34,35,36,37,38,39,29,28,27,26,25,24,23,22,21,20,10,11,12,13,14,15,16,17,18,19,9,8,7,6,5,4,3,2,1,0
+
+; rotated swipe
+DATA 90,80,91,70,81,92,60,71,82,93,50,61,72,83,94,40,51,62,73,84,95,30,41,52,63,74,85,96,20,31,42,53,64,75,86,97,10,21,32,43,54,65,76,87,98,0,11,22,33,44,55,66,77,88,99,1,12,23,34,45,56,67,78,89,2,13,24,35,46,57,68,79,3,14,25,36,47,58,69,4,15,26,37,48,59,5,16,27,38,49,6,17,28,39,7,18,29,8,19,9
+
+; outside in
+DATA 0,1,2,3,4,5,6,7,8,9,19,29,39,49,59,69,79,89,99,98,97,96,95,94,93,92,91,90,80,70,60,50,40,30,20,10,11,12,13,14,15,16,17,18,28,38,48,58,68,78,88,87,86,85,84,83,82,81,71,61,51,41,31,21,22,23,24,25,26,27,37,47,57,67,77,76,75,74,73,72,62,52,42,32,33,34,35,36,46,56,66,65,64,63,53,43,44,45,55,54
+
+; crawl
+DATA 90,80,91,70,92,82,93,95,96,72,81,94,85,97,84,98,62,99,87,75,60,71,83,88,78,89,74,65,86,52,73,63,76,50,61,55,79,68,66,77,45,69,59,64,54,40,51,42,32,44,53,49,57,67,56,35,30,41,22,34,46,58,39,48,25,36,31,20,43,21,12,10,38,47,0,33,15,26,29,37,24,11,2,23,16,5,19,27,14,9,1,4,28,17,13,7,6,18,3,8
+
+; two columns
+DATA 90,99,80,89,70,79,60,69,50,59,40,49,30,39,20,29,10,19,0,9,91,98,81,88,71,78,61,68,51,58,41,48,31,38,21,28,11,18,1,8,92,97,82,87,72,77,62,67,52,57,42,47,32,37,22,27,12,17,2,7,93,96,83,86,73,76,63,66,53,56,43,46,33,36,23,26,13,16,3,6,94,95,84,85,74,75,64,65,54,55,44,45,34,35,24,25,14,15,4,5
 
 ; the order to reveal the blocks on load encoded as 16 bit: x = i >> 4, y = i & $f
 ; DATA 1029,1285,1284,1028,772,773,774,1030,1286,1542,1541,1540,1539,1283,1027,771,515,516,517,518,519,775,1031,1287,1543,1799,1798,1797,1796,1795,1794,1538,1282,1026,770,514,258,259,260,261,262,263,264,520,776,1032,1288,1544,1800,2056,2055,2054,2053,2052,2051,2050,2049,1793,1537,1281,1025,769,513,257,1,2,3,4,5,6,7,8,9,265,521,777,1033,1289,1545,1801,2057,2313,2312,2311,2310,2309,2308,2307,2306,2305,2304,2048,1792,1536,1280,1024,768,512,256,0
