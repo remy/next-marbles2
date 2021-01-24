@@ -15,15 +15,26 @@
 
 RUN AT 3
 
+ON ERROR GO TO 9200
+
 #define BANKPAL=15
 #define BANKSPR=16
 #define BANKRND=17
 #define BANKNEXTLEVEL=18
 #define BANKPLOT=19
 #define BANKGFX=20
+#define BANKLIB=21
+#define BANKDEBUG=0
+
+; entry points in the marbles.bin library for methods and method constants
+#define M_POPULATEGRID=437
+#define M_RANDOMSEED=417
+#define M_TAG=481
+#define M_TAGINDEX=482
 
 #define OFFSETRESTART=0
 #define OFFSETNEWLEVEL=1309
+#define OFFSETBUTTONS=2618
 
 #define GRIDSTART=22
 
@@ -54,7 +65,7 @@ RUN AT 3
 %p(#DEVICE)=#KEYBAORD
 %p(#SCORE)=0
 %p(#THEME)=%1*5: ; or 2
-%p(#SEED)=%1
+%p(#SEED)=%$8f7a
 %p(#BEST)=1036
 
 PROC reset()
@@ -143,7 +154,7 @@ ENDPROC
 
 DEFPROC readMouse()
   DRIVER 126,1 TO %b,%x,%y
-  IF %b&@111 THEN PROC selectBlock(%x,%y)
+  IF %b&@111 THEN PROC select()
 ENDPROC
 
 DEFPROC readJoystick()
@@ -151,177 +162,77 @@ DEFPROC readJoystick()
   REM 12345678901234567890123456789012345678901234567890
 ENDPROC
 
-DEFPROC selectBlock()
-  IF %p(#BUSY) THEN ENDPROC
-  %p(#BUSY)=1
-
+DEFPROC select()
   %i=%( SPRITE OVER (#POINTER,0 TO 99)): ; which block are we over when we selected
 
-  IF %i > 99 THEN %p(#BUSY)=0: ENDPROC : ; out of scope
+  ; colliding 0 sprite returns 128 (can't remember why though!)
+  IF %i=128 THEN %i=0
 
-  %x=%( SPRITE AT (i,0)-32) >> 4
-  %y=%( SPRITE AT (i,1)-48) >> 4
-  %b=%( SPRITE AT (i,2))-p(#THEME): ; manual offset
+;   PROC pad2(%i) TO s$
+;   PRINT AT 10,21;"SELECT  ";s$;%i
 
-  IF %a[i]=#EMPTY THEN %p(#BUSY)=0: ENDPROC : ; empty block
+  IF %i > 99 THEN ENDPROC : ; out of scope
 
-  %c=0: ; c is the pointer in the %c[] array
-  %c[c]=-1: ; %c[] is the collected blocks taggged
+  IF %p(#BUSY) THEN ENDPROC
 
-  PROC tag(%b,%x,%y)
+  PROC selectBlock()
+ENDPROC
+
+; %i = selected block
+; Uses: %c, %i, %t
+; Modifies: %p
+DEFPROC selectBlock()
+
+  %p(#BUSY)=1
+
+  ; load %i into tagIndex
+  BANK #BANKLIB POKE #M_TAGINDEX,%i
+  ; call Tag()
+  %t=% BANK #BANKLIB USR #M_TAG
+
+  ; %t contains the address of the number of blocks tagged
+  %c=% BANK #BANKLIB PEEK t
 
   IF %c < 2 THEN %p(#BUSY)=0: ENDPROC
 
-  BANK #BANKPLOT POKE %p(#PLOTPTR),%c[0]
+  %p(#SCORE)=%p(#SCORE)+(c*(5+c))
+  %p(#BLOCKSLEFT)=%p(#BLOCKSLEFT)-c
+  BANK #BANKPLOT POKE %p(#PLOTPTR),%i: ; store the block cleared
   %p(#PLOTPTR)=%p(#PLOTPTR)+1
 
-  %p(#BLOCKSLEFT)=%p(#BLOCKSLEFT)-c
-  %p(#SCORE)=%p(#SCORE)+(c*(5+c))
+  ; clear the tagged blocks
+  %x=9
+  %y=9
+  FOR %i=1 TO %c
+    SPRITE % BANK #BANKLIB PEEK (t+i),,,#EMPTY,
+    %j=%i MOD 10
+    IF %j < x THEN %x=j
+  NEXT %i
 
   INK 50
   PROC pad2(%c) TO s$
   PRINT AT 3,21;"CLEARED ";s$;%c
+  PROC pad2(%p(#PLOTPTR)) TO s$
+  PRINT AT 4,21;"MOVES   ";s$;%p(#PLOTPTR)
   PROC pad2(%p(#BLOCKSLEFT)) TO s$
-  PRINT AT 4,21;"REMAIN  ";s$;%p(#BLOCKSLEFT)
+  PRINT AT 5,21;"REMAIN  ";s$;%p(#BLOCKSLEFT)
   INK 255
   PROC pad4(%p(#SCORE)) TO s$
   PRINT AT 2,21;"SCORE ";s$;%p(#SCORE)
 
-  ; this helps me calculate the area to move blocks - which means less itterations
-  %z(#XMIN)=9
-  %z(#XMAX)=0
-  %z(#YMIN)=0
-  ; remove the selected blocks
-  FOR %i=%0 TO %(c-1)
-;     SPRITE %c[i],,,55,
-    %a[c[i]]=#EMPTY
+  ; now full render
+  %c=100
+  REPEAT
+    %c=%c-1
+    %i=% BANK #BANKLIB PEEK c
+    IF %i < 255 THEN %i=%i+p(#THEME): ELSE %i=#EMPTY
+    SPRITE %c,,,%i,
 
-    PROC toXY(%c[i]) TO %x,%y
-    IF %x < z(#XMIN) THEN %z(#XMIN)=%x
-    IF %x > z(#XMAX) THEN %z(#XMAX)=%x
-    IF %y > z(#YMIN) THEN %z(#YMIN)=%y
-
-    ; allow UI to tick
-    PROC readInput()
-  NEXT %i
-
-  %x=%z(#XMIN)
-  %z(#XMAX)=%z(#XMAX)+1
-  ; marginly faster than doing a FOR x TO loop
-  REPEAT : WHILE %x <> z(#XMAX)
-    %y=%z(#YMIN)
-    REPEAT : WHILE %y <> -1
-      %i=%(10*y)+x
-      IF %a[i]=#EMPTY THEN PROC clearColumn(%i,%x,%y):%y=0: ; IF %f THEN %y=%y+1
-
-      ; allow UI to tick
-      PROC readInput()
-
-      %y=%y-1
-    REPEAT UNTIL 0
-    %x=%x+1
-  REPEAT UNTIL 0
-
-  ; now collapse the columns
-  %x=%z(#XMIN)
-  %z=%-1
-  REPEAT : WHILE %x <> 10
-    %i=%90+x
-    IF %a[i]=#EMPTY THEN %z=%x: ELSE : IF %z <> -1 THEN PROC shiftColumn(%x,%z):%z=%-1:%x=0
-    %x=%x+1
-  REPEAT UNTIL 0
-
-  IF %p(#BLOCKSLEFT)=0 THEN PROC nextLevel()
+    ; slow down the render a little
+;     IF %(n MOD 10)=0 THEN PROC readInput()
+  REPEAT UNTIL %c=0
 
   %p(#BUSY)=0
-ENDPROC
-
-DEFPROC shiftColumn(%x,%z)
-  %y=%0
-  REPEAT : WHILE %y < 10
-    %a=%10*y
-    %i=%a+x: ; left
-    %j=%a+z: ; right
-
-    %a=%a[i]
-    %a[i]=%a[j]
-    SPRITE %i,,,%a[j]+p(#THEME),
-    %a[j]=%a
-    SPRITE %j,,,%a+p(#THEME),
-
-    PROC readInput()
-
-    %y=%y+1
-  REPEAT UNTIL 0
-
-ENDPROC
-
-DEFPROC clearColumn(%i,%x,%y)
-  REPEAT
-    %y=%y-1
-    %t=%(10*y)+x
-
-    WHILE %y <> -1: ; break
-
-    ; if we hit a block, then swap it's position
-    IF %a[t] <> #EMPTY THEN PROC clearColumnSwap()
-
-    ; allow UI to tick
-    PROC readInput()
-  REPEAT UNTIL 0
-ENDPROC
-
-; mutate values
-DEFPROC clearColumnSwap()
-  ; swap the blocks at %i and %t
-  %a=%a[i]
-  %a[i]=%a[t]
-  SPRITE %i,,,%a[t]+p(#THEME),
-  %a[t]=%a
-  SPRITE %t,,,%a+p(#THEME),
-
-  ; cycle to the block directly above
-  %i=%i-10
-ENDPROC
-
-DEFPROC tag(%b,%x,%y)
-
-  IF %x > 9 THEN ENDPROC
-  IF %y > 9 THEN ENDPROC
-
-  %i=%(10*y)+x
-
-  IF %i > 99 THEN ENDPROC : ; out of bounds
-  IF %b <> a[i] THEN ENDPROC : ; not a match
-
-  %j=%0
-  %t=%0
-
-  ; array.includes?
-  REPEAT
-    IF %c THEN IF %c[j]=i THEN %t=%1
-    ; allow UI to tick
-    PROC readInput()
-    %j=%j+1
-  REPEAT UNTIL %(j >= c) OR (t=1)
-  IF %t THEN ENDPROC
-
-  %c[c]=%i
-
-  ; remove the sprites as we find them (so long as we find 2 or more)
-  IF %c THEN SPRITE %c[c],,,#EMPTY,
-  IF %c=1 THEN SPRITE %c[0],,,#EMPTY,
-
-  %c=%c+1
-
-  ; allow UI to tick
-  PROC readInput()
-
-  ; now search for more
-  PROC tag(%b,%x-1,%y)
-  PROC tag(%b,%x+1,%y)
-  PROC tag(%b,%x,%y-1)
-  PROC tag(%b,%x,%y+1)
 
 ENDPROC
 
@@ -343,10 +254,26 @@ ENDPROC =r$
 DEFPROC startGame(%s)
   %p(#LEVEL)=1
   %p(#SCORE)=0
-  %p(#PLOTPTR)=0
   BANK #BANKPLOT ERASE
+  BANK #BANKPLOT DPOKE 0,%s: ; first 16bit word is the seed
+  %p(#PLOTPTR)=2
   PROC setSeed(%s)
   PROC loadBlocks()
+
+  IF #BANKDEBUG=0 THEN ENDPROC
+
+  ; DEBUG - repeat a game sequence
+  LOAD "./CRASH-2.BIN" BANK #BANKDEBUG
+
+
+
+  %j=2
+  REPEAT
+    %i=% BANK #BANKDEBUG PEEK j
+    WHILE %i <> 255
+    PROC selectBlock()
+    %j=%j+1
+  REPEAT UNTIL 0
 ENDPROC
 
 DEFPROC replayGame()
@@ -362,41 +289,31 @@ DEFPROC loadBlocks()
 
   INK 50
   PRINT AT 3,21;"CLEARED   0"
-  PRINT AT 4,21;"REMAIN  100"
+  PRINT AT 4,21;"MOVES     0"
+  PRINT AT 5,21;"REMAIN  100"
   INK 255
   PRINT AT 2,21;"SCORE     0"
   PROC pad4(%p(#LEVEL)) TO s$
-  PRINT AT 6,21;"LEVEL ";s$;%p(#LEVEL)
+  PRINT AT 7,21;"LEVEL ";s$;%p(#LEVEL)
 
-  %n=0
+  BANK #BANKGFX LAYER #OFFSETBUTTONS TO 22,14,10,8
+
+  ; call PopulateGrid
+  %n=% BANK #BANKLIB USR #M_POPULATEGRID
+
+  ; this uses a predefined order to render the blocks in a circle which makes
+  ; for a nice effect
+  %n=100
+  RESTORE
   REPEAT
-    PROC pickRandom() TO %r
-    PROC toXY(%n) TO %x,%y
-    SPRITE %n,%(x*16)+32,%(y*16)+48,%r+p(#THEME),0
-    %a[n]=%r
-    %n=%n+1
-  REPEAT UNTIL %n=100
-
-  %n=0
-  REPEAT
-    SPRITE %n,,,,1
-    %n=%n+1
-  REPEAT UNTIL %n=100
-ENDPROC
-
-DEFPROC testRnd()
-  LAYER 2,1
-  CLEAR
-  CLS
-
-  SPRITE PRINT 0
-  %n=0
-  REPEAT
-    PROC pickRandom() TO %r
-    PRINT %r
-    %n=%n+1
-  REPEAT UNTIL %n=100
-
+    %n=%n-1
+    READ %j
+    %r=% BANK #BANKLIB PEEK j
+    PROC toXY(%j) TO %x,%y
+    SPRITE %j,%(x*16)+32,%(y*16)+48,%r+p(#THEME),1
+    %a[j]=%r
+    PAUSE 1
+  REPEAT UNTIL %n=0
 ENDPROC
 
 DEFPROC toXY(%n)
@@ -405,7 +322,7 @@ DEFPROC toXY(%n)
 ENDPROC =%x,%y
 
 DEFPROC setSeed(%s)
-  BANK #BANKRND DPOKE %1,%s
+  BANK #BANKLIB DPOKE %#M_RANDOMSEED,%s
   %p(#SEED)=%s
   PROC printSeed()
 ENDPROC
@@ -414,9 +331,9 @@ DEFPROC printSeed()
   %s=%p(#SEED)
   PROC toHex(%s) TO s$
   INK 50
-  PRINT AT 7,21;"SEED  #";s$
+  PRINT AT 8,21;"SEED  #";s$
   PROC pad4(%p(#BEST)) TO s$
-  PRINT AT 8,21;"BEST  ";s$;%p(#BEST)
+  PRINT AT 9,21;"BEST  ";s$;%p(#BEST)
 ENDPROC
 
 DEFPROC pad4(%w)
@@ -439,12 +356,6 @@ DEFPROC onAnyKey()
   PRINT AT 10,21;"         "
 ENDPROC
 
-DEFPROC pickRandom()
-  ; default seed is 1 - to change this we need to BANK #BANKRND DPOKE %1, %<16-bit> - but only during start game
-  %r=% BANK #BANKRND USR 0
-  BANK #BANKRND DPOKE %1,%r
-ENDPROC =%r&3
-
 DEFPROC loadAssets()
   BORDER 0: PAPER 0: CLS
   LOAD "./assets/font.bin" CODE 64000
@@ -455,6 +366,8 @@ DEFPROC loadAssets()
   LOAD "assets/over-next-level.bin" BANK #BANKNEXTLEVEL
   LOAD "assets/restart.nxi" BANK #BANKGFX,#OFFSETRESTART,1309
   LOAD "assets/new-level.nxi" BANK #BANKGFX,#OFFSETNEWLEVEL,1309
+  LOAD "assets/buttons.nxi" BANK #BANKGFX,#OFFSETBUTTONS,5120
+  LOAD "assets/marbles.bin" BANK #BANKLIB
 
   ; shadow L2 ends at 14, so we start at 15
   LOAD "assets/marbles.pal" BANK #BANKPAL
@@ -469,13 +382,6 @@ DEFPROC loadAssets()
   SPRITE BORDER 1
 
   POKE 23658,0: ; turn off CAPS LOCK (for menu items)
-
-  %i=0
-  REPEAT
-    READ %o
-    BANK #BANKRND POKE %i,%o
-    %i=%i+1
-  REPEAT UNTIL %o=201
 ENDPROC
 
 DEFPROC reset()
@@ -512,18 +418,25 @@ DEFPROC R1()
   IF %x < (320-1) THEN SPRITE #POINTER,%x+1,,,,
 ENDPROC
 DEFPROC F1()
-  PROC selectBlock()
+  PROC select()
 ENDPROC
 DEFPROC F2()
-  PROC selectBlock()
+  PROC select()
 ENDPROC
 DEFPROC F3()
-  PROC selectBlock()
+  PROC select()
 ENDPROC
 
-; 16-bit xorshift pseudorandom number generator
-; ld bc,1 : ld a,b: rra: ld a,c: rra: xor b: ld b,a: ld a,c: rra: ld a,b: rra: xor c: ld c,a: xor b: ld b,a: ret
-DATA 1,1,0,120,31,121,31,168,71,121,31,120,31,169,79,168,71,201: ; length: 18
+DEFPROC onAnyKey()
+  REPEAT : REPEAT UNTIL INKEY$ =""
+  REPEAT : REPEAT UNTIL INKEY$ <> "" OR ( IN 31=16)
+  REPEAT : REPEAT UNTIL INKEY$ =""
+ENDPROC
+
+DATA 54,55,45,44,43,53,63,64,65,66,56,46,36,35,34,33,32,42,52,62,72,73,74,75,76,77,67,57,47,37,27,26,25,24,23,22,21,31,41,51,61,71,81,82,83,84,85,86,87,88,78,68,58,48,38,28,18,17,16,15,14,13,12,11,10,20,30,40,50,60,70,80,90,91,92,93,94,95,96,97,98,99,89,79,69,59,49,39,29,19,9,8,7,6,5,4,3,2,1,0
+
+; the order to reveal the blocks on load encoded as 16 bit: x = i >> 4, y = i & $f
+; DATA 1029,1285,1284,1028,772,773,774,1030,1286,1542,1541,1540,1539,1283,1027,771,515,516,517,518,519,775,1031,1287,1543,1799,1798,1797,1796,1795,1794,1538,1282,1026,770,514,258,259,260,261,262,263,264,520,776,1032,1288,1544,1800,2056,2055,2054,2053,2052,2051,2050,2049,1793,1537,1281,1025,769,513,257,1,2,3,4,5,6,7,8,9,265,521,777,1033,1289,1545,1801,2057,2313,2312,2311,2310,2309,2308,2307,2306,2305,2304,2048,1792,1536,1280,1024,768,512,256,0
 
 #autoline
 9000 DEFPROC installMouse()
@@ -539,3 +452,20 @@ DATA 1,1,0,120,31,121,31,168,71,121,31,120,31,169,79,168,71,201: ; length: 18
 9090 .install assets/input.drv
 9100 ON ERROR
 9110 ENDPROC
+
+# error handling needs to be outside a proc
+9200 ERROR TO err,lin,st
+9210 e$= STR$ err
+9220 ON ERROR
+9230 LAYER 2,1
+9240 PALETTE CLEAR
+9250 LAYER CLEAR
+9260 SPRITE CLEAR
+9270 BORDER 7: INK 0: PAPER 7
+9280 CLS
+9290 SPRITE PRINT 0: ; turn off sprites
+9300 PRINT "Error:";e$;", line:";lin;", statement:";st
+9310 REPEAT : REPEAT UNTIL INKEY$ =""
+9320 REPEAT : REPEAT UNTIL INKEY$ <> "" OR ( IN 31=16)
+9330 REPEAT : REPEAT UNTIL INKEY$ =""
+
