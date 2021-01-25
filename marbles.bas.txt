@@ -5,8 +5,6 @@
 ;-------------------------------------------------------------------------------
 ; VARIABLES
 ;
-; %a[] - complete virtual grid of blocks and state
-; %c[] - collected blocks when selection is made
 ; %p() - player state
 ; i$   - input key
 ;
@@ -22,14 +20,16 @@ ON ERROR GO TO 9200
 #define BANKNEXTLEVEL=18
 #define BANKPLOT=19
 #define BANKLIB=20
-#define BANKDEBUG=0
 #define BANKGFX_A=22
 #define BANKGFX_B=23
+
+# set debug bank to 21 to load predefined sequence
+#define BANKDEBUG=0
 
 ; bank graphic offsets
 #define OFFSET_BUTTONS=0
 #define OFFSET_NEW_GAME_BOX=5120
-#define OFFSET_NEXT_LEVEL=11840
+#define OFFSET_NEXT_LEVEL=10880
 #define OFFSET_GAME_OVER=0
 
 ; entry points in the marbles.bin library for methods and method constants
@@ -83,27 +83,6 @@ DEFPROC mainLoop()
     IF i$="r" THEN PROC replayGame()
     IF i$="n" THEN PROC newGame()
   REPEAT UNTIL 0
-ENDPROC
-
-DEFPROC nextLevel()
-  %p(#LEVEL)=%p(#LEVEL)+1
-  ; show Next Level box
-  BANK #BANKNEXTLEVEL COPY TO 10
-
-  ; FIXME test why the sprites aren't rendering over the layer even though it has priority on the palette
-  SPRITE #COUNTER,97,113,58,1, BIN 0,1,1
-  SPRITE #COUNTER-1,97,113,62,1, BIN 0,1,1: ; put a sprite under the countdown that's solid white, just in case we hide the counter before we clear the screen
-  SPRITE CONTINUE #COUNTER, STOP , STOP ,58 TO 61, BIN 01100000,60,60: ; count down effect
-
-  REPEAT
-    SPRITE MOVE INT
-  REPEAT UNTIL % SPRITE #COUNTER=0
-
-  SPRITE #COUNTER-1,,,,0: ; remove the backing sprite
-
-  CLS
-  PROC printSeed()
-  PROC loadBlocks()
 ENDPROC
 
 DEFPROC selectInput()
@@ -211,7 +190,7 @@ DEFPROC selectBlock()
   INK 50
   PROC pad2(%c) TO s$
   PRINT AT 3,21;"CLEARED ";s$;%c
-  PROC pad2(%p(#PLOTPTR)) TO s$
+  PROC pad2(%p(#PLOTPTR)-2) TO s$
   PRINT AT 4,21;"MOVES   ";s$;%p(#PLOTPTR)
 ;   PROC pad2(%p(#BLOCKSLEFT)) TO s$
 ;   PRINT AT 5,21;"REMAIN  ";s$;%p(#BLOCKSLEFT)
@@ -233,20 +212,22 @@ DEFPROC selectBlock()
 
   %p(#BUSY)=0
 
+  IF %( BANK #BANKLIB PEEK #M_CANMOVE)=0 THEN %p(#BUSY)=1: PAUSE 10: PROC gameOver()
   IF %p(#BLOCKSLEFT)=0 THEN PROC nextLevel()
 
-  IF %( BANK #BANKLIB PEEK #M_CANMOVE)=0 THEN %p(#BUSY)=1: PAUSE 10: PROC gameOver()
 
 ENDPROC
 
 DEFPROC gameOver()
-  %z=0
+  LOCAL %i
+  LOCAL %j
+  %i=0
+  %j=0
   i$=""
   REPEAT
-;     PROC readInput()
-    BANK #BANKGFX_B LAYER %(2560*z) TO 6,22,20,2
-    PAUSE 5
-    %z=%(z+1) MOD 4
+    PROC readInput()
+    IF %j&7=0 THEN : BANK #BANKGFX_B LAYER %(2560*i) TO 6,22,20,2:%i=%(i+1) MOD 4
+    %j=%j+1
     i$= INKEY$
   REPEAT UNTIL (i$="r") OR (i$="n") OR (i$="e")
 
@@ -269,6 +250,28 @@ DEFPROC toHex(%i)
     %i=%i >> 4
   REPEAT UNTIL 0
 ENDPROC =r$
+
+DEFPROC nextLevel()
+  %p(#LEVEL)=%p(#LEVEL)+1
+
+  ; show Next Level box
+  BANK #BANKGFX_A LAYER #OFFSET_NEXT_LEVEL TO 5,9,10,6
+
+  SPRITE #COUNTER,97,116,58,1, BIN 0,1,1
+  SPRITE #COUNTER-1,97,116,62,1, BIN 0,1,1: ; put a sprite under the countdown that's solid white, just in case we hide the counter before we clear the screen
+  SPRITE CONTINUE #COUNTER, STOP , STOP ,58 TO 61, BIN 01100000,60,60: ; count down effect
+
+  REPEAT
+    SPRITE MOVE INT
+  REPEAT UNTIL % SPRITE #COUNTER=0
+
+  SPRITE #COUNTER-1,,,,0: ; remove the backing sprite
+
+  ; remove only the "new level" box that we painted
+  LAYER ERASE 40,72,80,48
+  PROC printSeed()
+  PROC loadBlocks()
+ENDPROC
 
 DEFPROC startGame(%s)
   SPRITE PRINT 0
@@ -293,20 +296,22 @@ DEFPROC startGame(%s)
   IF #BANKDEBUG=0 THEN PROC loadBlocks(): ENDPROC
 
   ; DEBUG - repeat a game sequence
-  LOAD "./BLOCKED.BIN" BANK #BANKDEBUG
+  LOAD "./ABOUT-TO-WIN.BIN" BANK #BANKDEBUG
 
   %i=% BANK #BANKDEBUG DPEEK 0
   PROC setSeed(%i)
 
   PROC loadBlocks()
-
-  %j=2
+  LOCAL %i
+  LOCAL %z
+  %z=2
   REPEAT
-    %i=% BANK #BANKDEBUG PEEK j
+    %i=% BANK #BANKDEBUG PEEK z
     WHILE %i <> 255
+    PRINT AT 11,21;"BRICK ";%i;"@";%z;" "
     PROC selectBlock()
-    PAUSE %2+(i MOD 5)
-    %j=%j+1
+    PAUSE 10
+    %z=%z+1
   REPEAT UNTIL 0
 ENDPROC
 
@@ -315,7 +320,67 @@ DEFPROC replayGame()
 ENDPROC
 
 DEFPROC newGame()
-  PROC startGame(%1+ RND $fffe)
+
+  ; TODO print screen to let user select a seed
+  %s=%1+ RND $fffe
+
+  PROC toHex(%s) TO s$
+
+  BANK #BANKGFX_A LAYER #OFFSET_NEW_GAME_BOX TO 3,9,15,6
+  INK 252: ; priority black
+  PAPER 250: ; light grey background
+  PRINT CHR$ 29;1; CHR$ 28;1; : ; turn on big
+  PRINT AT 12,6;s$; CHR$ 138
+
+  %i=0
+  ; wait until the key is clear
+  REPEAT : REPEAT UNTIL INKEY$ =""
+  %j=14
+  c$=s$
+  REPEAT
+    IF %i THEN INK 250: ELSE INK 252
+    PRINT AT 12,%j; CHR$ 138
+    %i=%(i+1) MOD 2
+    i$= INKEY$
+
+    %c= CODE i$
+    ; del key
+    IF %c=12 THEN PRINT AT 12,%j;" ":%j=%j-2:j=%j:c$=c$(1 TO 1+((j/2)-3))
+    IF %j < 6 THEN %j=6
+
+    ; TODO 0-9a-f + limit j to 14
+    PROC tryToPrintChr()
+
+    PAUSE 36
+  REPEAT UNTIL %c=13: ; return key
+
+  ; convert c$ from hex to decimal
+
+  ; key up
+  REPEAT : REPEAT UNTIL INKEY$ =""
+
+  LAYER ERASE 24,72,120,48
+
+  ; reset font sizes
+  PRINT CHR$ 29;0; CHR$ 28;0; : ; turn off big
+  INK 255
+  PAPER 0
+
+  PROC startGame(%s)
+ENDPROC
+
+DEFPROC tryToPrintChr()
+  IF %c < $30 THEN ENDPROC : ; numeric lower
+  IF %c > $66 THEN ENDPROC : ; alpha upper
+
+  IF %(c > $39) AND (c < $61) THEN ENDPROC : ; in between
+
+  IF %j=14 THEN ENDPROC : ; no room left
+  c=%c
+  INK 252
+  PRINT AT 12,%j; CHR$ c
+  c$=c$+ CHR$ c
+  %j=%j+2
 ENDPROC
 
 DEFPROC loadBlocks()
@@ -401,8 +466,8 @@ DEFPROC loadAssets()
 
   LOAD "assets/over-next-level.bin" BANK #BANKNEXTLEVEL
   LOAD "assets/buttons.nxi" BANK #BANKGFX_A,#OFFSET_BUTTONS,5120
-  LOAD "assets/new-game.nxi" BANK #BANKGFX_A,#OFFSET_NEW_GAME_BOX,6720
-  LOAD "assets/next-level-in-simple.nxi" BANK #BANKGFX_A,#OFFSET_NEXT_LEVEL,3840: ; sum = 15680
+  LOAD "assets/new-game.nxi" BANK #BANKGFX_A,#OFFSET_NEW_GAME_BOX,5760
+  LOAD "assets/next-level-small.nxi" BANK #BANKGFX_A,#OFFSET_NEXT_LEVEL,3840: ; sum = 15680
   LOAD "assets/game-over.nxi" BANK #BANKGFX_B,#OFFSET_GAME_OVER,10240
 
   ; marbles library
@@ -490,9 +555,10 @@ DATA 90,80,91,70,92,82,93,95,96,72,81,94,85,97,84,98,62,99,87,75,60,71,83,88,78,
 ; two columns
 DATA 90,99,80,89,70,79,60,69,50,59,40,49,30,39,20,29,10,19,0,9,91,98,81,88,71,78,61,68,51,58,41,48,31,38,21,28,11,18,1,8,92,97,82,87,72,77,62,67,52,57,42,47,32,37,22,27,12,17,2,7,93,96,83,86,73,76,63,66,53,56,43,46,33,36,23,26,13,16,3,6,94,95,84,85,74,75,64,65,54,55,44,45,34,35,24,25,14,15,4,5
 
-; the order to reveal the blocks on load encoded as 16 bit: x = i >> 4, y = i & $f
-; DATA 1029,1285,1284,1028,772,773,774,1030,1286,1542,1541,1540,1539,1283,1027,771,515,516,517,518,519,775,1031,1287,1543,1799,1798,1797,1796,1795,1794,1538,1282,1026,770,514,258,259,260,261,262,263,264,520,776,1032,1288,1544,1800,2056,2055,2054,2053,2052,2051,2050,2049,1793,1537,1281,1025,769,513,257,1,2,3,4,5,6,7,8,9,265,521,777,1033,1289,1545,1801,2057,2313,2312,2311,2310,2309,2308,2307,2306,2305,2304,2048,1792,1536,1280,1024,768,512,256,0
-
+# these lines need to numbered so that they can error and GOTO the right lines
+# whereas in autoline I can't use GOTO. The error handler also sits at the root
+# of the scope (i.e. not in a DEFPROC) so that I can cleanly get the error during
+# debugging.
 #autoline
 9000 DEFPROC installMouse()
 9010 ON ERROR GO TO 9030
