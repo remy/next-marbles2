@@ -69,23 +69,27 @@ ON ERROR GO TO 9200
 
 PROC reset()
 PROC loadAssets()
-PROC selectInput()
-PROC replayGame()
-
 PROC mainLoop()
 
 PAUSE 0
 
 DEFPROC mainLoop()
-  %i=0
   REPEAT
-    PROC readInput()
-    IF i$="r" THEN PROC replayGame()
-    IF i$="n" THEN PROC newGame()
+    PROC selectInput()
+    PROC replayGame()
+
+    REPEAT
+      PROC readInput()
+      IF i$="r" THEN PROC replayGame()
+      IF i$="n" THEN PROC newGame()
+    REPEAT UNTIL i$="e"
   REPEAT UNTIL 0
 ENDPROC
 
 DEFPROC selectInput()
+  SPRITE PRINT 0
+  CLS
+
   PAPER 254: INK 255: BORDER 0
   LOAD "assets/welcome.nxi" LAYER
 
@@ -108,6 +112,7 @@ DEFPROC selectInput()
   IF %(#DEVICE)=#JOYSTICK THEN DRIVER 125,2,3
   IF %(#DEVICE)=#KEYBAORD THEN DRIVER 125,2,5
 
+  SPRITE PRINT 1
   CLS
 ENDPROC
 
@@ -191,9 +196,9 @@ DEFPROC selectBlock()
   PROC pad2(%c) TO s$
   PRINT AT 3,21;"CLEARED ";s$;%c
   PROC pad2(%p(#PLOTPTR)-2) TO s$
-  PRINT AT 4,21;"MOVES   ";s$;%p(#PLOTPTR)
-;   PROC pad2(%p(#BLOCKSLEFT)) TO s$
-;   PRINT AT 5,21;"REMAIN  ";s$;%p(#BLOCKSLEFT)
+  PRINT AT 4,21;"MOVES   ";s$;%(p(#PLOTPTR)-2)
+  PROC pad2(%p(#BLOCKSLEFT)) TO s$
+  PRINT AT 5,21;"REMAIN  ";s$;%p(#BLOCKSLEFT)
   INK 255
   PROC pad4(%p(#SCORE)) TO s$
   PRINT AT 2,21;"SCORE ";s$;%p(#SCORE)
@@ -250,6 +255,30 @@ DEFPROC toHex(%i)
     %i=%i >> 4
   REPEAT UNTIL 0
 ENDPROC =r$
+
+DEFPROC fromHex(s$)
+  LOCAL i: ; counter (since we need to splice)
+  LOCAL %j: ; int value for i
+  LOCAL %l: ; string length
+  LOCAL %r: ; return value
+  LOCAL c$: ; current char
+  LOCAL %i: ; numeric value of current char
+
+  %l= LEN (s$)
+
+  %r=0
+
+  FOR i=%l TO 1 STEP -1
+    c$=s$(i TO i)
+    %i= CODE c$
+    IF %i > $46 THEN %i=%i-$20: ; to uppercase
+    IF %i > $39 THEN %i=%i-$37: ELSE %i=%i-$30: ; to number
+
+    %j=i
+    %r=%r+((i)*(1 << ((l-j)*4)))
+;     PRINT c$;"-";%i;"-";%1 << ((l-j)*4)
+  NEXT i
+ENDPROC =%r
 
 DEFPROC nextLevel()
   %p(#LEVEL)=%p(#LEVEL)+1
@@ -320,8 +349,6 @@ DEFPROC replayGame()
 ENDPROC
 
 DEFPROC newGame()
-
-  ; TODO print screen to let user select a seed
   %s=%1+ RND $fffe
 
   PROC toHex(%s) TO s$
@@ -338,9 +365,6 @@ DEFPROC newGame()
   %j=14
   c$=s$
   REPEAT
-    IF %i THEN INK 250: ELSE INK 252
-    PRINT AT 12,%j; CHR$ 138
-    %i=%(i+1) MOD 2
     i$= INKEY$
 
     %c= CODE i$
@@ -348,24 +372,22 @@ DEFPROC newGame()
     IF %c=12 THEN PRINT AT 12,%j;" ":%j=%j-2:j=%j:c$=c$(1 TO 1+((j/2)-3))
     IF %j < 6 THEN %j=6
 
-    ; TODO 0-9a-f + limit j to 14
     PROC tryToPrintChr()
+
+    IF i$ <> "" THEN INK 252: ELSE : IF %i THEN INK 250: ELSE INK 252
+    PRINT AT 12,%j; CHR$ 138
+    %i=%(i+1) MOD 2
 
     PAUSE 36
   REPEAT UNTIL %c=13: ; return key
-
-  ; convert c$ from hex to decimal
-
-  ; key up
-  REPEAT : REPEAT UNTIL INKEY$ =""
 
   LAYER ERASE 24,72,120,48
 
   ; reset font sizes
   PRINT CHR$ 29;0; CHR$ 28;0; : ; turn off big
-  INK 255
-  PAPER 0
+  INK 255: PAPER 0
 
+  PROC fromHex(c$) TO %s: ; convert the text to a numeric value
   PROC startGame(%s)
 ENDPROC
 
@@ -374,6 +396,8 @@ DEFPROC tryToPrintChr()
   IF %c > $66 THEN ENDPROC : ; alpha upper
 
   IF %(c > $39) AND (c < $61) THEN ENDPROC : ; in between
+
+  IF (c$="000") AND (i$="0") THEN ENDPROC : ; prevent 0000
 
   IF %j=14 THEN ENDPROC : ; no room left
   c=%c
