@@ -1,0 +1,31 @@
+#autoline 10
+
+#define BANKLIB=21
+
+LOAD "assets/marbles.bin" BANK #BANKLIB
+
+PRINT "set seed..."
+BANK #BANKLIB DPOKE %658,%1
+
+PRINT "populate..."
+%n=% BANK #BANKLIB USR 416
+
+PRINT "populated called, now setting tag"
+
+; load %i into tagIndex
+BANK #BANKLIB POKE 461,4
+; call Tag()
+%t=% BANK #BANKLIB USR 460
+
+PRINT "BC raw ";%t
+
+; %t contains the address of the number of blocks tagged
+%c=% BANK #BANKLIB PEEK t
+
+PRINT "tag count:";%c
+
+FOR %i=1 TO %c
+  PRINT % BANK #BANKLIB PEEK (t+i)
+NEXT %i
+
+PAUSE 0

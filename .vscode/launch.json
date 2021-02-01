@@ -1,0 +1,69 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "dezog",
+      "request": "launch",
+      "name": "Internal (sna)",
+      "remoteType": "zsim",
+      "zsim": {
+        "zxKeyboard": true,
+        "ulaScreen": true,
+        "visualMemory": true,
+        "vsyncInterrupt": true,
+        "memoryModel": "ZX48K"
+      },
+      "rootFolder": "${workspceFolder}",
+      // "tmpDir": "${fileDirname}",
+      "tmpDir": "${workspceFolder}",
+      "sjasmplus": [
+        {
+          "path": "${fileDirname}/${fileBasenameNoExtension}.sld",
+          "useFiles": true,
+          "asm": "sjasmplus",
+          "mainFile": "${file}"
+        }
+      ],
+      "disassemblerArgs": {
+        "esxdosRst": true
+      },
+      "commandsAfterLaunch": ["-assertion enable"],
+      "load": "${fileDirname}/${fileBasenameNoExtension}.sna",
+      "startAutomatically": true,
+      "preLaunchTask": "snabuild"
+    },
+    {
+      "type": "dezog",
+      "request": "launch",
+      "name": "Internal (nex)",
+      "remoteType": "zsim",
+      "zsim": {
+        "Z80N": true,
+        // "zxKeyboard": true,
+        "ulaScreen": true,
+        "visualMemory": true,
+        "vsyncInterrupt": true,
+        "memoryModel": "ZXNEXT"
+      },
+      "rootFolder": "${workspceFolder}",
+      "sjasmplus": [
+        {
+          "path": "${fileDirname}/${fileBasenameNoExtension}.sld",
+          "useFiles": true,
+          "asm": "sjasmplus",
+          "mainFile": "${file}"
+        }
+      ],
+      "disassemblerArgs": {
+        "esxdosRst": true
+      },
+      "commandsAfterLaunch": ["-assertion enable"],
+      "load": "${fileDirname}/${fileBasenameNoExtension}.sna",
+      "startAutomatically": true,
+      "preLaunchTask": "sjasmplus"
+    }
+  ]
+}

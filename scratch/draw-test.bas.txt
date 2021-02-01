@@ -1,0 +1,11 @@
+#autoline 10
+
+RUN AT 3
+LAYER 2,1
+
+LOAD "assets/buttons.nxi" BANK 20
+CLS
+
+BANK 20 LAYER 0 TO 21,14,10,8
+
+PAUSE 0

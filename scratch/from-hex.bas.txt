@@ -1,0 +1,25 @@
+#autoline 10
+
+; usage: PROC fromHex("034f") TO %v
+DEFPROC fromHex(s$)
+  LOCAL i: ; counter (since we need to splice)
+  LOCAL %j: ; int value for i
+  LOCAL %l: ; string length
+  LOCAL %r: ; return value
+  LOCAL c$: ; current char
+  LOCAL %i: ; numeric value of current char
+
+  %l= LEN (s$)
+
+  %r=0
+
+  FOR i=%l TO 1 STEP -1
+    c$=s$(i TO i)
+    %i= CODE c$
+    IF %i > $46 THEN %i=%i-$20: ; to uppercase
+    IF %i > $39 THEN %i=%i-$37: ELSE %i=%i-$30: ; to number
+
+    %j=i
+    %r=%r+((i)*(1 << ((l-j)*4)))
+  NEXT i
+ENDPROC =%r

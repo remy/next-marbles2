@@ -1,0 +1,5 @@
+#autoline 10
+
+REPEAT
+  PRINT AT 10,10;">"; CODE INKEY$ ;"<"
+REPEAT UNTIL 0
