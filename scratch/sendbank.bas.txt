@@ -1,23 +1,23 @@
 1 RUN AT 3
 3 %r=1
 5 BORDER 0: PAPER 0: INK 7
-10 PROC send(%21,%256): PRINT "done": PAUSE 0: GO TO 10
+10 PROC send(%21,%256) TO %e: PRINT "fin: ";%e: PAUSE 0: GO TO 10
 20 DEFPROC send(%z,%l): ; %z = bank to send
-30 LOCAL %n: LOCAL %p: LOCAL %b: LOCAL %c: LOCAL %t: LOCAL %e: LOCAL %o
-40 LET %n=78: LET %p=0:%b=22:%c=23: LET %t=0: LET %e=0:%o=0: ;controlvars
+30 LOCAL %n: LOCAL %p: LOCAL %b: LOCAL %c: LOCAL %t: LOCAL %e: LOCAL %o: LOCAL b$
+40 LET %n=78: LET %p=0:%b=22:%c=23: LET %t=0: LET %e=0:%o=0:b$="": ;controlvars
 50 ; PRINT "closing channels": CLOSE # 15: ; first close any channels; 15 = the connection test
 60 ; CLOSE # 7: ; 7 = communication channel
 70 ON ERROR GO TO 100: ; probe driver and if it fails install it
-80 PRINT "OPEN # 15": OPEN # 15,"D>N":
-90 ON ERROR : PRINT "driver connected": CLOSE # 15: GO TO 1000: ; driver is installed
+80 OPEN # 15,"D>N":
+90 ON ERROR : CLOSE # 15: GO TO 1000: ; driver is installed
 100 : ; else install drivers now
 110 ON ERROR GO TO 130: ; if uninstall fails, just jump over
-120 PRINT "uninstall espat.drv":.uninstall /nextos/espat.drv
-130 PRINT "now installing": ON ERROR GO TO 170: ; if we error, it's possible it's already installed
-150 PRINT "install espat.drv":.install /nextzxos/espat.drv
-170 PRINT "load espat.sys @ ";%c: PAUSE 0: LOAD "/nextzxos/espat.sys" BANK %c: ; load the patch
+120 .uninstall /nextos/espat.drv
+130 ON ERROR GO TO 170: ; if we error, it's possible it's already installed
+150 .install /nextzxos/espat.drv
+170 LOAD "/nextzxos/espat.sys" BANK %c: ; load the patch
 190 ; ON ERROR : GO TO 80: ; re-try the driver TODO track attempts and bail
-200 PRINT "DRIVER ";%n;",1,";%c: DRIVER %n,1,%c: ; 0 to allocate main memory, patch and initialise
+200 DRIVER %n,1,%c: ; 0 to allocate main memory, patch and initialise
 210 ; BANK %b ERASE
 215 ; ON ERROR GO TO 220: DRIVER %n,7,%b: ; remove the 16k from memory allowing for repeat runs
 220 ON ERROR GO TO 2980
@@ -27,32 +27,32 @@
 240 DRIVER %n,3: ; get CMD or IPD channel values
 250 GO TO 1000
 1000 ON ERROR : ; main user code
-1005 PRINT "now user code"
 1010 LOAD "./scope.bas.txt" BANK 21
 1020 ON ERROR GO TO 2000
 1030 h$="192.168.1.118":p$="8080": ; our public api
-1040 PRINT "open tcp": OPEN # 7,"D>N>TCP,"+h$+","+p$
+1040 OPEN # 7,"D>N>TCP,"+h$+","+p$
 1050 DRIVER 78,10,1,0: ; set 256/cr buffer
 1060 ON ERROR
 1300 ON ERROR GO TO 1355
-1305 PRINT "Attempt ";%r;" - sending ";%l*2;" bytes from ";%z: PRINT #7;"P"; CHR$ (13)+ CHR$ (10)
+1305 PRINT "Attempt ";%r;" - sending ";%l*2;" bytes from ";%z:
+1307 PRINT #7;"P"; CHR$ (13)+ CHR$ (10)
 1310 REPEAT
 1320 d=% BANK z DPEEK o
 1330 %o=%o+2
 1340 IF %o&63=0 OR (o >= l) THEN PRINT #7; STR$ (d)+ CHR$ (13)+ CHR$ (10): ELSE : PRINT #7; STR$ (d)+",";
 1350 REPEAT UNTIL %o >= l
-1355 ON ERROR GO TO 1390: PRINT "early bail"
+1355 ON ERROR GO TO 1380
 1360 PRINT #7; CHR$ (13)+ CHR$ (10)
 1370 INPUT #7, LINE b$
-1380 PRINT b$:%r=%r+1
-1390 ON ERROR : REPEAT : REPEAT UNTIL INKEY$ ="": REPEAT : REPEAT UNTIL INKEY$ <> "" OR ( IN 31=16): REPEAT : REPEAT UNTIL INKEY$ =""
-1400 %e=1: GO TO 2990
+1380 %r=%r+1
+1390 IF b$="ACK" THEN %e=0: GO TO 2990
+1400 %e=1: GO TO 2990: ; message partially sent
 2000 ERROR TO err,l: ; error handler for tcp connect
-2010 ON ERROR : PRINT "Error ";err;", line: ";l
-2020 IF err <> 15 THEN %e=0: GO TO 2990
+2010 ON ERROR : ; PRINT "Error ";err;", line: ";l
+2020 IF err <> 15 THEN %e=9: GO TO 2990: ; unknown
 2030 %t=%t+1
-2040 IF %t > 3 THEN PRINT "Fatal TCP connect errors":%e=0: GO TO 2990
+2040 IF %t > 3 THEN %e=2: GO TO 2990: ; Fatal TCP connect errors
 2050 GO TO 220
-2980 %e=0
-2990 PRINT "Exit": DRIVER 78,3,128: DRIVER 78,1,65535: BANK %b CLEAR : BANK %c CLEAR : CLOSE # 7: ; disable the driver
+2980 %e=3: ; driver failure
+2990 DRIVER 78,3,128: DRIVER 78,1,65535: BANK %b CLEAR : BANK %c CLEAR : CLOSE # 7: ; disable the driver
 3000 ENDPROC =%e
