@@ -1,0 +1,106 @@
+#autoline 1,1
+RUN AT 3
+%r=1
+BORDER 0: PAPER 0: INK 7: CLS
+
+h$="192.168.1.118": ;"18.134.205.210"
+p$="8080": ; our public api
+
+LOAD "./test.txt" BANK 21
+
+; errors: 0=success, 1=data partially sent, 2=unrecoverable TCP connect failure, 3=driver failure, 9=unknown error
+DIM a$(10,20)
+a$(1)="success"
+a$(2)="partially sent"
+a$(3)="unrecoverable/no wifi"
+a$(4)="driver fail"
+a$(10)="unknown error"
+
+REPEAT
+  PROC send(%21,%11) TO %e
+  e=%e+1
+  PRINT "Done: ";%e;": ";a$(e)
+  PAUSE 0
+REPEAT UNTIL 0
+
+DEFPROC send(%z,%l): ; %z = bank to send
+  LOCAL %p: LOCAL %b: LOCAL %c: LOCAL %t: LOCAL %e: LOCAL %o: LOCAL b$
+  LET %p=0: LET %t=0: LET %e=0:%o=0:b$="": ;controlvars
+  BANK NEW %b: BANK NEW %c
+
+  ON ERROR GO TO 100: ; probe driver and if it fails install it
+  PRINT "open #15"
+  OPEN # 15,"D>N":
+  ON ERROR
+  CLOSE # 15
+  PRINT "closed #15 - on to main"
+  GO TO 1000: ; driver is installed
+
+#autoline
+100 ON ERROR GO TO 120: ; if we error, it's possible it's already installed
+105 PRINT "installing espat.drv"
+110 .install /nextzxos/espat.drv
+#autoline 120,1
+
+  PRINT "load espat.sys into ";%c;" bank"
+  LOAD "/nextzxos/espat.sys" BANK %c: ; load the patch
+  DRIVER 78,1,%c: ; 0 to allocate main memory, patch and initialise
+
+  PRINT "Add 16K bank to IPD receive pool on bank ";%b
+#autoline
+220 ON ERROR GO TO 227
+225 DRIVER 78,6,%b
+227 ON ERROR : ; Add 16k to the receive pool
+#autoline 230,1
+
+  DRIVER 78,9,0 TO %p: ; set prescaler to 115k
+  DRIVER 78,3: ; get CMD or IPD channel values
+
+  ; main code lives here
+#autoline
+1000 ON ERROR GO TO 2000
+#autoline 1010,1
+  PRINT "> main"
+
+  OPEN # 7,"D>N>TCP,"+h$+","+p$
+  DRIVER 78,10,1,0: ; set 256/cr buffer
+  ON ERROR
+  ON ERROR GO TO 1500
+  PRINT %r;" - sending ";%o;" TO ";%(o+l)
+  PRINT #7;"P"; CHR$ (13)+ CHR$ (10)
+  FOR %i=%o TO %(o+l)
+    d=% BANK z PEEK i
+    PRINT #7; CHR$ (d);
+  NEXT %i
+  ON ERROR GO TO 1500
+  PRINT #7; CHR$ (13)+ CHR$ (10): ; close out the connection
+  INPUT #7, LINE b$
+  PRINT "ACK? ";b$
+  GO TO 1600
+
+#autoline
+1500 %r=%r+1
+1510 ERROR TO err,l: PRINT "Partial - ";err;" - quit at ";%i
+#autoline 1600,1
+
+  IF b$="ACK" THEN %e=0: GO TO 3000
+  %e=1: GO TO 3000: ; message partially sent
+
+#autoline
+2000 ERROR TO err,l: ; error handler for tcp connect
+2010 ON ERROR
+2020 IF err <> 15 THEN %e=9: GO TO 3000: ; unknown
+2030 %t=%t+1
+2040 IF %t > 3 THEN %e=2: GO TO 3000: ; Fatal TCP connect errors
+2050 PRINT "General error handler returning loop"
+2060 GO TO 220
+2980 %e=3: ; driver failure
+3000 ; exit point
+#autoline 3010,1
+
+  DRIVER 78,3,128
+  DRIVER 78,1,65535
+  BANK %b CLEAR
+  BANK %c CLEAR
+  CLOSE # 7: ; disable the driver
+ENDPROC =%e
