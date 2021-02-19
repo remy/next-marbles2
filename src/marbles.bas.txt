@@ -42,6 +42,7 @@ ON ERROR GO TO 9200
 #define POINTER=127
 #define POINTERSPR=63
 #define COUNTER=126
+#define FAKESPR=4
 
 ; user state
 #define DEVICE=1
@@ -106,8 +107,10 @@ DEFPROC selectInput()
     IF % IN 31=16 THEN %p(#DEVICE)=#JOYSTICK:start=1
   REPEAT UNTIL start=1
 
-  IF %p(#DEVICE)=#MOUSE THEN PROC installMouse(): DRIVER 126,2,#POINTER,#POINTERSPR
-  IF %p(#DEVICE) <> #MOUSE THEN PROC installInput(): SPRITE #POINTER,96,72,#POINTERSPR,1
+  SPRITE #POINTER,96,72,#POINTERSPR,1
+
+  IF %p(#DEVICE)=#MOUSE THEN PROC installMouse()
+  IF %p(#DEVICE) <> #MOUSE THEN PROC installInput()
 
   IF %(#DEVICE)=#JOYSTICK THEN DRIVER 125,2,3
   IF %(#DEVICE)=#KEYBAORD THEN DRIVER 125,2,5
@@ -133,11 +136,12 @@ ENDPROC
 
 DEFPROC readInput()
   i$= INKEY$
-  IF %p(#DEVICE)=#MOUSE THEN PROC readMouse(): ELSE PROC readJoystick(): ENDPROC
+  IF %p(#DEVICE)=#MOUSE THEN PROC readMouse(): ELSE PROC readJoystick()
 ENDPROC
 
 DEFPROC readMouse()
   DRIVER 126,1 TO %b,%x,%y
+  SPRITE #POINTER,%x/2,%y,,,
   IF %b&@111 THEN PROC select()
 ENDPROC
 
@@ -147,18 +151,17 @@ DEFPROC readJoystick()
 ENDPROC
 
 DEFPROC select()
-  %i=%( SPRITE OVER (#POINTER,0 TO 99)): ; which block are we over when we selected
+  %i=%( SPRITE OVER (#POINTER,1 TO 100)): ; which block are we over when we selected
 
   ; colliding 0 sprite returns 128 (can't remember why though!)
   IF %i=128 THEN %i=0
 
-;   PROC pad2(%i) TO s$
-;   PRINT AT 10,21;"SELECT  ";s$;%i
-
+  IF %i=0 THEN ENDPROC
   IF %i > 99 THEN ENDPROC : ; out of scope
 
   IF %p(#BUSY) THEN ENDPROC
 
+  %i=%i-1
   PROC selectBlock()
 ENDPROC
 
@@ -189,7 +192,7 @@ DEFPROC selectBlock()
 
   ; clear the tagged blocks
   FOR %i=1 TO %c
-    SPRITE % BANK #BANKLIB PEEK (t+i),,,#EMPTY,
+    SPRITE %( BANK #BANKLIB PEEK (t+i))+1,,,#EMPTY,
   NEXT %i
 
   INK 50
@@ -209,10 +212,10 @@ DEFPROC selectBlock()
     %c=%c-1
     %i=% BANK #BANKLIB PEEK c
     IF %i < 255 THEN %i=%i+p(#THEME): ELSE %i=#EMPTY
-    SPRITE %c,,,%i,
+    SPRITE %c+1,,,%i,
 
     ; slow down the render a little
-;     IF %(n MOD 10)=0 THEN PROC readInput()
+
   REPEAT UNTIL %c=0
 
   %p(#BUSY)=0
@@ -317,7 +320,7 @@ DEFPROC startGame(%s)
   REPEAT
     %c=%c-1
     %i=% BANK #BANKLIB PEEK c
-    IF %i < 255 THEN SPRITE %c,,,,0: ; only clear them if they're visible
+    IF %i < 255 THEN SPRITE %c+1,,,,0: ; only clear them if they're visible
   REPEAT UNTIL %c=0
 
   SPRITE PRINT 1
@@ -435,7 +438,7 @@ DEFPROC loadBlocks()
     READ %j
     %r=% BANK #BANKLIB PEEK j
     PROC toXY(%j) TO %x,%y
-    SPRITE %j,%(x*16)+32,%(y*16)+48,%r+p(#THEME),1
+    SPRITE %j+1,%(x*16)+32,%(y*16)+48,%r+p(#THEME),1
     %a[j]=%r
     IF %n > 50 THEN PAUSE 1
   REPEAT UNTIL %n=0

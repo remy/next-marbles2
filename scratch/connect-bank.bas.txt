@@ -1,0 +1,61 @@
+#program connect-bank
+10 CLEAR 40959
+20 RUN AT 2
+30 GO SUB 310: REM Open Channel and install if needed
+35 ON ERROR GO TO 290
+50 BORDER 0: PAPER 0: INK 7: CLS
+60 LOAD "scope.bas.txt" BANK 21
+84 PROC tcpconnect("192.168.1.118",8080)
+85 PROC sendbank(21,0,256)
+110 ON ERROR GO TO 280
+130 DRIVER 78,3,128 TO %f,%i,%o: REM will clear flags
+140 PRINT "done"
+280 INPUT "Again ?";a$: IF a$ <> "y" AND a$ <> "Y" THEN GO TO 84
+290 ON ERROR : CLOSE # 15: CLOSE # 7: CLOSE # 6: CLOSE # 5
+300 STOP
+310 REM See if we can open network if not install drivers
+315 ON ERROR GO TO 350
+320 OPEN # 15,"D>N"
+330 ON ERROR
+340 RETURN
+350 PRINT "Installing driver in main memory as not loaded."
+355 ON ERROR GO TO 360
+356 .uninstall /nextos/espat.drv
+360 ON ERROR
+361 .install /nextzxos/espat.drv
+370 PRINT "Installed ESPAT.DRV"
+380 LET %n=78
+390 LET %m=0: PRINT "ESPAT.SYS Load page ";%m
+400 LOAD "/nextzxos/espat.sys" CODE 40960: REM IN main memory
+410 DRIVER %n,1,%m: REM 0 to allocate main memory, patch and initialise
+420 BANK NEW %b: PRINT "Allocating 1 buffer ";%b
+430 DRIVER %n,6,%b
+440 DRIVER %n,9,0 TO %p: PRINT "115K Baud - prescaler ";%p
+450 DRIVER %n,3: PRINT "IPD Driver started"
+455 GO TO 315
+460 RETURN
+
+900 DEFPROC tcpconnect(n$,p)
+910 OPEN # 7,"D>N>TCP,"+n$+","+ STR$ (p)
+915 DRIVER 78,10,1,0: REM set 256/CR buffer mode
+920 ENDPROC
+
+1000 DEFPROC sendbank(%n,%o,%l)
+1010 PRINT "reading ";%l*2;" bytes"
+1020 PRINT #7;"P"+ CHR$ (13)+ CHR$ (10)
+1030 LOCAL %e
+1040 %e=0
+1050 REPEAT
+1060 d=% BANK n DPEEK o
+1070 %o=%o+2
+1080 ; chunk the data into 128 byte blocks (though it's marginally more as it's sent as strings)
+1090 IF %o&63=0 OR (o >= l) THEN PRINT #7; STR$ (d)+ CHR$ (13)+ CHR$ (10): ELSE : PRINT #7; STR$ (d)+",";
+1100 REPEAT UNTIL %o >= l
+1120 PRINT "sending eol"
+1130 ;
+1140 ;   IF %e=0 THEN
+1150 PRINT #7; CHR$ (13)+ CHR$ (10)
+1160 ;
+1170 INPUT #7, LINE b$: ; expects to be "ACK"
+1180 PRINT b$
+1200 ENDPROC

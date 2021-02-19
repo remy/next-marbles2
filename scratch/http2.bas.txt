@@ -1,0 +1,133 @@
+#autoline 1,1
+RUN AT 3
+%r=1
+BORDER 0: PAPER 0: INK 7: CLS
+
+h$="192.168.1.118": ;"18.134.205.210"
+p$="8080": ; our public api
+
+BANK 22 POKE 0,0
+LOAD "./test.txt" BANK 21
+
+; errors: 0=success, 1=data partially sent, 2=unrecoverable TCP connect failure, 3=driver failure, 9=unknown error
+DIM a$(10,20)
+a$(1)="success"
+a$(2)="sent but bad response"
+a$(3)="unrecoverable/no wifi"
+a$(4)="driver fail"
+a$(5)="incomplete sent"
+a$(10)="unknown error"
+
+BANK NEW %b
+BANK NEW %c
+
+
+REPEAT
+  BORDER 3
+  PROC post(h$,p$,%21,0,%57,%b,%c) TO %e
+  e=%e+1
+  PRINT a$(e);"(";%e;")"
+  PAUSE 0
+REPEAT UNTIL 0
+
+; h$ = host address (ideally ip)
+; p$ = port number
+; %z = bank to send
+; %o = offset in bank
+; %l = length of bytes
+DEFPROC post(h$,p$,%z,%o,%l,%b,%c)
+  LOCAL %a: LOCAL %t: LOCAL %e: LOCAL r$: LOCAL l
+  LET %a=0: LET %t=0: LET %e=0: LET r$="": LET l=%l
+
+  LET %a= PEEK 23624: ; read the border colour to restore later
+  ON ERROR GO TO 100: ; probe driver and if it fails install it
+
+  ; we always reload in case values have been set
+  LOAD "/nextzxos/espat.sys" BANK %c: ; load the patch
+  DRIVER 78,1,%c: ; Set memory bank for CMD and SYS
+
+  OPEN # 15,"D>N":
+  ON ERROR
+  CLOSE # 15
+  GO TO 1000: ; driver is installed
+
+#autoline
+100 ON ERROR GO TO 120: ; if we error, it's possible it's already installed
+110 .install /nextzxos/espat.drv
+#autoline 120,1
+
+  LOAD "/nextzxos/espat.sys" BANK %c: ; load the patch
+  DRIVER 78,1,%c: ; Set memory bank for CMD and SYS
+
+#autoline
+220 ON ERROR GO TO 227
+225 DRIVER 78,6,%b: ; ; Add bank %b (16k) to the receive pool
+227 ON ERROR
+#autoline 230,1
+
+  DRIVER 78,9,0: ; Specific UART BAUD rate to be set from lookup table, DE=0 = 115200
+  DRIVER 78,3: ; get CMD or IPD channel values
+
+  ; main code lives here
+#autoline
+1000 ON ERROR GO TO 2000
+#autoline 1010,1
+
+  OPEN # 7,"D>N>TCP,"+h$+","+p$
+  DRIVER 78,10,1,0: ; DE=0 = wait for 256/cr buffer
+  ON ERROR GO TO 1500
+
+  ; send initial post header
+  PRINT #7;"POST / HTTP/1.1"+ CHR$ (13)+ CHR$ (10)+"Host: "+h$+":"+p$+ CHR$ (13)+ CHR$ (10)+"Content-Length: "+ STR$ (l)+ CHR$ (13)+ CHR$ (10)+ CHR$ (13)+ CHR$ (10);
+
+  FOR %i=%o TO %(o+l-1)
+    d=% BANK z PEEK i
+    PRINT #7; CHR$ (d);
+  NEXT %i
+  PRINT #7; CHR$ (13)+ CHR$ (10); : ; LF to end the post connection
+
+  ON ERROR ERROR TO err,lineNum: PRINT "+ failed read @ ";lineNum: GO TO 1500
+  ; when using INPUT #7 LINE $r - we get random total hang - suspect this is because DIM #7 TO %s can be $7FFF
+  r$=""
+  REPEAT
+    DRIVER 78,3,128: ; TO %f,%i,%o: REM will clear flags (which flags?)
+    DIM #7 TO %s
+    WHILE %s > 0
+    NEXT #7 TO c
+    IF c <> 79 THEN : ELSE : NEXT #7 TO c: IF c=75 THEN r$="OK"
+    WHILE c <> 13
+    ; try to find "OK"
+;     PRINT CHR$ (c);"(";c;") - @ ";%s;
+;     PRINT ""
+  REPEAT UNTIL %s=0
+
+  ; TODO check if the first line ends with "OK" - else it's an error
+
+  GO TO 1600
+
+#autoline
+1500 %e=4: ; incomplete send
+1510 GO TO 3000
+#autoline 1600,1
+  IF r$="OK" THEN %e=0: GO TO 3000
+  %e=1: GO TO 3000: ; message partially sent - no OK found
+
+#autoline
+2000 ERROR TO err,lineNum: ; error handler for tcp connect
+2010 ON ERROR
+2015 PRINT "+ error: ";err;" @ ";lineNum
+2020 IF err <> 15 THEN %e=9: GO TO 3000: ; unknown
+2030 %t=%t+1
+2040 IF %t > 3 THEN %e=2: GO TO 3000: ; Fatal TCP connect errors
+2060 GO TO 220
+2980 %e=3: ; driver failure
+3000 ; exit point
+#autoline 3010,1
+  ON ERROR
+  DRIVER 78,3,128
+  DRIVER 78,1,65535: ; stop the IRQ scanning to let regular NextBASIC speed up
+;   BANK %b CLEAR : ; FIXME decide whether this is a problem...
+;   BANK %c CLEAR
+  CLOSE # 7: ; disable the driver
+  BORDER %(a >> 3)
+ENDPROC =%e

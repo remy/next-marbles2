@@ -1,3 +1,5 @@
 lib/*.lst
 *.sld
 *.labels
+cspect_win.dat
+cspect.log

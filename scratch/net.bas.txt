@@ -1,0 +1,47 @@
+10 LOAD "./test.txt" BANK 21: PROC send("192.168.1.118,8080",21,0,9): ; errors: 0=success, 1=data partially sent, 2=unrecoverable TCP connect failure, 3=driver failure, 9=unknown error
+20 DEFPROC send(h$,%z,%o,%l): ; h$ = host <ip,port>, %z = bank to send, %o = offset, %l = length
+30 LOCAL %p: LOCAL %b: LOCAL %c: LOCAL %t: LOCAL %e: LOCAL b$
+40 LET %p=0: BANK NEW %b: BANK NEW %c: LET %t=0: LET %e=0: LET b$="": ;controlvars
+70 ON ERROR GO TO 100: ; probe driver and if it fails install it
+80 OPEN # 15,"D>N":
+90 ON ERROR : CLOSE # 15: GO TO 1000: ; driver is installed
+100 : ; else install drivers now
+110 ON ERROR GO TO 130: ; if uninstall fails, just jump over
+120 .uninstall /nextos/espat.drv
+130 ON ERROR GO TO 170: ; if we error, it's possible it's already installed
+150 .install /nextzxos/espat.drv
+170 LOAD "/nextzxos/espat.sys" BANK %c: ; load the patch
+200 DRIVER 78,1,%c: ; 0 to allocate main memory, patch and initialise
+210 ; BANK %b ERASE
+220 ON ERROR GO TO 2980
+225 DRIVER 78,6,%b: ; Add 16k to the receive pool
+227 ON ERROR
+230 DRIVER 78,9,0: ; TO %p: ; set prescaler to 115k
+240 DRIVER 78,3: ; get CMD or IPD channel values
+250 GO TO 1000
+1020 ON ERROR GO TO 2000
+1040 OPEN # 7,"D>N>TCP,"+h$
+1050 DRIVER 78,10,1,0: ; set 256/cr buffer
+1060 ON ERROR
+1300 ON ERROR GO TO 1355
+1307 PRINT #7;"P"; CHR$ (13)+ CHR$ (10)
+1310 REPEAT
+1320 d=% BANK z PEEK o
+1330 %o=%o+1
+1340 IF %o&63=0 OR (o >= l) THEN PRINT #7; STR$ (d)+ CHR$ (13)+ CHR$ (10): ELSE : PRINT #7; STR$ (d)+",";
+1345 IF %(o+1 <> l) THEN : ELSE %o=%o+1: PRINT #7; STR$ (d)
+1350 REPEAT UNTIL %o >= l
+1355 ON ERROR GO TO 1380
+1360 PRINT #7; CHR$ (13)+ CHR$ (10)
+1370 INPUT #7, LINE b$
+1390 IF b$="ACK" THEN %e=0: GO TO 2990
+1400 %e=1: GO TO 2990: ; message partially sent
+2000 ERROR TO err,l: ; error handler for tcp connect
+2010 ON ERROR
+2020 IF err <> 15 THEN %e=9: GO TO 2990: ; unknown
+2030 %t=%t+1
+2040 IF %t > 3 THEN %e=2: GO TO 2990: ; Fatal TCP connect errors
+2050 GO TO 220
+2980 %e=3: ; driver failure
+2990 DRIVER 78,3,128: DRIVER 78,1,65535: BANK %b CLEAR : BANK %c CLEAR : CLOSE # 7: ; disable the driver
+3000 ENDPROC =%e

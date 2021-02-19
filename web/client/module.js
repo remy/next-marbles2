@@ -21,7 +21,7 @@ function makeBlock(colour) {
   return ctx.getImageData(0, 0, 16, 16);
 }
 
-let seed = Uint16Array.of(1234);
+let seed = Uint16Array.of(1);
 function rnd() {
   let xs = Uint16Array.of(seed[0]);
 

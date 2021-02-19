@@ -1,18 +1,18 @@
-1 RUN AT 3: ; errors: 0=success, 1=data partially sent, 2=unrecoverable TCP connect failure, 3=driver failure, 9=unknown error
-3 %r=1: DIM a$(10,20):a$(1)="success":a$(2)="partially sent":a$(3)="unrecoverable/no wifi":a$(4)="driver fail":a$(10)="unknown error"
+1 RUN AT 3
+3 %r=1
 5 BORDER 0: PAPER 0: INK 7: CLS
-10 PROC send(%21,%11) TO %e:e=%e+1: PRINT "fin: ";%e;": ";a$(e): PAUSE 25: GO TO 10
+10 PROC send(%21,%9) TO %e: PRINT "fin: ";%e: PAUSE 0: GO TO 10
 20 DEFPROC send(%z,%l): ; %z = bank to send
-30 LOCAL %n: LOCAL %p: LOCAL %b: LOCAL %c: LOCAL %t: LOCAL %e: LOCAL %o: LOCAL b$
-40 LET %n=78: LET %p=0:%b=22:%c=23: LET %t=0: LET %e=0:%o=0:b$="": ;controlvars
+30 LOCAL %n: LOCAL %p: LOCAL %b: LOCAL %c: LOCAL %t: LOCAL %e: LOCAL %o: LOCAL b$: LOCAL l
+40 LET %n=78: LET %p=0:%b=22:%c=23: LET %t=0: LET %e=0: LET %o=0: LET b$="": LET l=%l: ;controlvars
 50 ; PRINT "closing channels": CLOSE # 15: ; first close any channels; 15 = the connection test
 60 ; CLOSE # 7: ; 7 = communication channel
 70 ON ERROR GO TO 100: ; probe driver and if it fails install it
 80 OPEN # 15,"D>N":
 90 ON ERROR : CLOSE # 15: GO TO 1000: ; driver is installed
 100 : ; else install drivers now
-110 ; ON ERROR GO TO 130: ; if uninstall fails, just jump over
-120 ; .uninstall /nextos/espat.drv
+110 ON ERROR GO TO 130: ; if uninstall fails, just jump over
+120 .uninstall /nextos/espat.drv
 130 ON ERROR GO TO 170: ; if we error, it's possible it's already installed
 150 .install /nextzxos/espat.drv
 170 LOAD "/nextzxos/espat.sys" BANK %c: ; load the patch
@@ -20,7 +20,7 @@
 200 DRIVER %n,1,%c: ; 0 to allocate main memory, patch and initialise
 210 ; BANK %b ERASE
 215 ; ON ERROR GO TO 220: DRIVER %n,7,%b: ; remove the 16k from memory allowing for repeat runs
-220 ON ERROR GO TO 227: ;2980
+220 ON ERROR GO TO 2980
 225 DRIVER %n,6,%b
 227 ON ERROR : ; Add 16k to the receive pool
 230 DRIVER %n,9,0 TO %p: ; set prescaler to 115k
@@ -29,28 +29,33 @@
 1000 ON ERROR : ; main user code
 1010 LOAD "./test.txt" BANK 21
 1020 ON ERROR GO TO 2000
-1030 h$="18.134.205.210":p$="8080": ; our public api
+1030 h$="192.168.1.118":p$="9991": ; our public api
 1040 OPEN # 7,"D>N>TCP,"+h$+","+p$
 1050 DRIVER 78,10,1,0: ; set 256/cr buffer
 1060 ON ERROR
-1300 ON ERROR GO TO 1353
-1305 PRINT %r;" - sending ";%o;" TO ";%(o+l)
-1307 PRINT #7;"P"; CHR$ (13)+ CHR$ (10)
-1310 FOR %i=%o TO %(o+l)
-1320 d=% BANK z PEEK i
+1300 ON ERROR GO TO 1360
+1301 PRINT "Attempt ";%r;" - sending ";%l;" bytes from ";%z: PRINT "Content-Length: "+ STR$ (l):
+1302 PRINT #7;"POST / HTTP/1.1"+ CHR$ (13)+ CHR$ (10)
+1303 PRINT #7;"Host: "+h$+":"+p$+ CHR$ (13)+ CHR$ (10)
+1305 PRINT #7;"Content-Type: application/x-www-form-urlencoded"+ CHR$ (13)+ CHR$ (10)
+1308 PRINT #7;"Content-Length: "+ STR$ (l)+ CHR$ (13)+ CHR$ (10);
+1309 PRINT #7; CHR$ (13)+ CHR$ (10)
+1310 REPEAT
+1320 d=% BANK z PEEK o
+1330 %o=%o+1
+1340 ; IF %o&63=0 OR (o >= l) THEN PRINT #7; CHR$ (d)+ CHR$ (13)+ CHR$ (10): ELSE : PRINT #7; CHR$ (d);
 1345 PRINT #7; CHR$ (d);
-1350 NEXT %i
-1352 GO TO 1355
-1353 ERROR TO err,l: PRINT "Partial - ";err;" - quit at ";%i
-1355 ON ERROR GO TO 1380
-1360 PRINT #7; CHR$ (13)+ CHR$ (10)
-1370 INPUT #7, LINE b$
-1375 PRINT "res:";b$
-1380 %r=%r+1
-1390 IF b$="ACK" THEN %e=0: GO TO 2990
+1350 REPEAT UNTIL %o >= l
+1355 PRINT "closing": PRINT #7; CHR$ (13)+ CHR$ (10): ; close the connection then read
+1360 ON ERROR GO TO 1381
+1370 INPUT #7, LINE b$: PRINT b$
+1375 ERROR TO err,lineNum
+1381 %r=%r+1
+1385 PRINT "X "+err+", line: ";lineNum
+1390 IF b$="ACK" THEN %e=0: GO TO 2990: ELSE
 1400 %e=1: GO TO 2990: ; message partially sent
-2000 ERROR TO err,l: ; error handler for tcp connect
-2010 ON ERROR : ; PRINT "Error ";err;", line: ";l
+2000 ERROR TO err,lineNum: ; error handler for tcp connect
+2010 ON ERROR : PRINT "Error ";err;", line: ";lineNum
 2020 IF err <> 15 THEN %e=9: GO TO 2990: ; unknown
 2030 %t=%t+1
 2040 IF %t > 3 THEN %e=2: GO TO 2990: ; Fatal TCP connect errors
