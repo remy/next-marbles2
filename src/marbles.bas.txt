@@ -23,6 +23,12 @@ ON ERROR GO TO 9200
 #define BANKGFX_A=22
 #define BANKGFX_B=23
 
+# plot data structure
+# seed[2]
+# moves_length[2]
+# moves[...]
+# name[3]
+
 # set debug bank to 21 to load predefined sequence
 #define BANKDEBUG=0
 
@@ -55,6 +61,7 @@ ON ERROR GO TO 9200
 #define SEED=8
 #define LEVEL=9
 #define LOAD_PATTERN=10
+#define GOT_HIGH_SCORE=11
 
 #define MOUSE=1
 #define JOYSTICK=2
@@ -187,8 +194,9 @@ DEFPROC selectBlock()
   %p(#BLOCKSLEFT)=%p(#BLOCKSLEFT)-c
   BANK #BANKPLOT POKE %p(#PLOTPTR),%i: ; store the block cleared
   %p(#PLOTPTR)=%p(#PLOTPTR)+1
+  BANK #BANKPLOT DPOKE 2,%p(#PLOTPTR)-4: ; add the count of moves to the data
 
-  IF %p(#SCORE) > p(#BEST) THEN %p(#BEST)=%p(#SCORE)
+  IF %p(#SCORE) > p(#BEST) THEN %p(#BEST)=%p(#SCORE):%p(#GOT_HIGH_SCORE)=1
 
   ; clear the tagged blocks
   FOR %i=1 TO %c
@@ -223,7 +231,6 @@ DEFPROC selectBlock()
   IF %( BANK #BANKLIB PEEK #M_CANMOVE)=0 THEN %p(#BUSY)=1: PAUSE 10: PROC gameOver()
   IF %p(#BLOCKSLEFT)=0 THEN PROC nextLevel()
 
-
 ENDPROC
 
 DEFPROC gameOver()
@@ -232,8 +239,14 @@ DEFPROC gameOver()
   %i=0
   %j=0
   i$=""
+
+  ; save their last game to disk
+  SAVE "last.bnk" BANK #BANKPLOT,0,%p(#PLOTPTR)
+;   IF %p(#GOT_HIGH_SCORE) THEN
+  PROC postHighScore()
+
   REPEAT
-    PROC readInput()
+;     PROC readInput()
     IF %j&7=0 THEN : BANK #BANKGFX_B LAYER %(2560*i) TO 6,22,20,2:%i=%(i+1) MOD 4
     %j=%j+1
     i$= INKEY$
@@ -242,6 +255,19 @@ DEFPROC gameOver()
   ; clear the section that showed game over
   BANK 11 ERASE 12288,4096,0
 
+ENDPROC
+
+DEFPROC postHighScore()
+  ; TODO prompt for name - limit 10?
+  n$="REM"
+  BANK #BANKPLOT POKE %p(#PLOTPTR),n$
+  l=%p(#PLOTPTR)+3
+  l$= STR$ l
+  b$= STR$ #BANKPLOT
+
+;   ON ERROR ENDPROC
+
+  ../assets/httpbank post -b b$ -l l$ -h data.remysharp.com -u /6 -f 7
 ENDPROC
 
 ; param {int} %i
@@ -310,9 +336,10 @@ DEFPROC startGame(%s)
   %p(#LEVEL)=1
   %p(#SCORE)=0
   %p(#BUSY)=0
-  BANK #BANKPLOT ERASE
+  %p(#GOT_HIGH_SCORE)=0
+  BANK #BANKPLOT ERASE %$7f
   BANK #BANKPLOT DPOKE 0,%s: ; first 16bit word is the seed
-  %p(#PLOTPTR)=2
+  %p(#PLOTPTR)=4
   PROC setSeed(%s)
 
   ; clear any blocks already on the board
@@ -391,6 +418,7 @@ DEFPROC newGame()
   INK 255: PAPER 0
 
   PROC fromHex(c$) TO %s: ; convert the text to a numeric value
+  IF %s=0 THEN %s=1
   PROC startGame(%s)
 ENDPROC
 
@@ -416,7 +444,7 @@ DEFPROC loadBlocks()
   INK 50
   PRINT AT 3,21;"CLEARED   0"
   PRINT AT 4,21;"MOVES     0"
-;   PRINT AT 5,21;"REMAIN  100"£
+;   PRINT AT 5,21;"REMAIN  100"
   INK 255
   PRINT AT 2,21;"SCORE     0"
   PROC pad4(%p(#LEVEL)) TO s$
