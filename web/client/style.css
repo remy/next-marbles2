@@ -12,4 +12,5 @@ canvas {
   /* height: 384px; */
   background: black;
   image-rendering: crisp-edges;
+  image-rendering: pixelated;
 }
