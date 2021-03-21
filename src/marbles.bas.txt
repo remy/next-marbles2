@@ -22,12 +22,23 @@ ON ERROR GO TO 9200
 #define BANKLIB=20
 #define BANKGFX_A=22
 #define BANKGFX_B=23
+#define BANK_FX=24
+#define BANK_REMOTE_SCORES=25
+#define BANK_LOCAL_SCORES=26
+
+#define DRV_FX=49
 
 # plot data structure
 # seed[2]
 # moves_length[2]
 # moves[...]
 # name[3]
+
+# high score structure
+# name[3]
+# seed[2]
+# score[...]
+# 0 byte terminator
 
 # set debug bank to 21 to load predefined sequence
 #define BANKDEBUG=0
@@ -71,12 +82,16 @@ ON ERROR GO TO 9200
 
 %p(#DEVICE)=#KEYBAORD
 %p(#SCORE)=0
-%p(#THEME)=%1*5: ; or 2*5
-%p(#SEED)=%$1
+%p(#THEME)=%4*5: ; or 2*5
+RANDOMIZE
+%p(#SEED)=%1+ RND $ffff
 %p(#BEST)=0
+
+h$="data.remysharp.com"
 
 PROC reset()
 PROC loadAssets()
+PROC showHighScores()
 PROC mainLoop()
 
 PAUSE 0
@@ -92,6 +107,82 @@ DEFPROC mainLoop()
       IF i$="n" THEN PROC newGame()
     REPEAT UNTIL i$="e"
   REPEAT UNTIL 0
+ENDPROC
+
+DEFPROC showHighScores()
+  LOCAL %i: ; memory peek position
+  LOCAL %j: ; screen print offset
+  LOCAL %k: ; high score position (1..10)
+  LOCAL %l: ; whether to print inverted
+  SPRITE PRINT 0
+  CLS
+
+  PAPER 254: INK 255: BORDER 0
+  LOAD "assets/welcome.nxi" LAYER
+
+  PRINT AT 5,11;"HIGH SCORES"
+
+  %i=0
+  %k=1
+  %j=1
+  REPEAT
+    WHILE % BANK #BANK_REMOTE_SCORES PEEK i <> 0
+
+    n$= BANK #BANK_REMOTE_SCORES PEEK$ (%i,3)
+    %j=% BANK #BANK_REMOTE_SCORES DPEEK (i+3): ; seed
+    PROC toHex(%j) TO s$
+    %s=% BANK #BANK_REMOTE_SCORES DPEEK (i+5): ; score
+
+    %i=%i+7
+
+    IF %k=5 THEN %l=1: ELSE :%l=0
+
+
+    IF %l=0 THEN INK 50
+    PRINT AT %6+(i/7),%5-(k/10);
+
+    PRINT FLASH %l;%k;".";
+    IF %l=0 THEN INK 255
+    PRINT FLASH %l;n$;
+    IF %l=0 THEN INK 50
+    PRINT FLASH %l;"   #";s$;"    ";
+    PROC pad4(%s) TO s$
+    IF %l=0 THEN INK 255
+    PRINT FLASH %l;s$;%s; FLASH 0
+    %k=%k+1
+
+  REPEAT UNTIL %i=0
+
+  PRINT AT 19,7;"Challenge? Yes/No"
+  PRINT AT 20,18;"▀"
+
+  REPEAT
+    k$= INKEY$
+  REPEAT UNTIL k$="y" OR k$="n" OR ( CODE k$)=13
+  REPEAT : REPEAT UNTIL INKEY$ =""
+
+  IF k$="n" THEN PRINT AT 20,18;"   ▀": SPRITE PRINT 1: CLS : ENDPROC
+
+  ; wait loop
+  PRINT AT 19,4;"Use cursors keys & enter"
+  PRINT AT 20,18;" "
+
+  %i=0
+  REPEAT
+    k$= INKEY$
+    %c= CODE k$
+
+    IF %c=11 THEN IF %i > 0 THEN %i=%i-1: ; up
+    IF %c=8 THEN IF %i > 0 THEN %i=%i-1: ; left (aka up)
+    IF %c=10 THEN IF %i < 10 THEN %i=%i+1: ; down
+    IF %c=9 THEN IF %i < 10 THEN %i=%i+1: ; right (aka down)
+
+    ; invert the row
+
+  REPEAT UNTIL %c=13
+
+  SPRITE PRINT 1
+  CLS
 ENDPROC
 
 DEFPROC selectInput()
@@ -190,6 +281,8 @@ DEFPROC selectBlock()
 
   IF %c < 2 THEN %p(#BUSY)=0: ENDPROC
 
+  DRIVER #DRV_FX,2,1: ; play the "clack" sound
+
   %p(#SCORE)=%p(#SCORE)+(c*(5+c))
   %p(#BLOCKSLEFT)=%p(#BLOCKSLEFT)-c
   BANK #BANKPLOT POKE %p(#PLOTPTR),%i: ; store the block cleared
@@ -207,7 +300,7 @@ DEFPROC selectBlock()
   PROC pad2(%c) TO s$
   PRINT AT 3,21;"CLEARED ";s$;%c
   PROC pad2(%p(#PLOTPTR)-2) TO s$
-  PRINT AT 4,21;"MOVES   ";s$;%(p(#PLOTPTR)-2)
+  PRINT AT 4,21;"MOVES   ";s$;%(p(#PLOTPTR)-4)
   PROC pad2(%p(#BLOCKSLEFT)) TO s$
   PRINT AT 5,21;"REMAIN  ";s$;%p(#BLOCKSLEFT)
   INK 255
@@ -240,7 +333,12 @@ DEFPROC gameOver()
   %j=0
   i$=""
 
+    DRIVER #DRV_FX,2,0
+
   ; save their last game to disk
+  n$="REM"
+  BANK #BANKPLOT POKE %p(#PLOTPTR),n$
+  %p(#PLOTPTR)=%p(#PLOTPTR)+3
   SAVE "last.bnk" BANK #BANKPLOT,0,%p(#PLOTPTR)
 ;   IF %p(#GOT_HIGH_SCORE) THEN
   PROC postHighScore()
@@ -258,22 +356,25 @@ DEFPROC gameOver()
 ENDPROC
 
 DEFPROC postHighScore()
-  ; TODO prompt for name - limit 10?
-  n$="REM"
-  BANK #BANKPLOT POKE %p(#PLOTPTR),n$
-  l=%p(#PLOTPTR)+3
+  ; TODO prompt for name - limit 3
+  l=%p(#PLOTPTR)
   l$= STR$ l
   b$= STR$ #BANKPLOT
 
 ;   ON ERROR ENDPROC
 
-  ../assets/httpbank post -b b$ -l l$ -h data.remysharp.com -u /6 -f 7
+  ; post to data.remysharp.com/6 - flash with white and base64 encode
+  ../assets/httpbank post -b b$ -l l$ -h h$ -u /6 -f 7 -7
 ENDPROC
 
 ; param {int} %i
 ; returns {string} hex string
 ; uses: %j, h$, r$, p
 DEFPROC toHex(%i)
+  LOCAL %j
+  LOCAL h$
+  LOCAL r$
+  LOCAL p
   %j=4: ; symbols (2 bytes = 4 symbols)
   h$="0123456789abcdef"
   r$=""
@@ -392,15 +493,16 @@ DEFPROC newGame()
   %i=0
   ; wait until the key is clear
   REPEAT : REPEAT UNTIL INKEY$ =""
-  %j=14
+  %j=14: ; %j is the character print offset on the X axis (max: 14, min: 6 - char width: 2)
   c$=s$
   REPEAT
     i$= INKEY$
 
     %c= CODE i$
     ; del key
-    IF %c=12 THEN PRINT AT 12,%j;" ":%j=%j-2:j=%j:c$=c$(1 TO 1+((j/2)-3))
+    IF %c=12 THEN PRINT AT 12,%j;" ":%j=%j-2
     IF %j < 6 THEN %j=6
+    IF %c=12 THEN j=%j:c$=c$(1 TO ((j/2)-3)): ; adjust the string if we deleted
 
     PROC tryToPrintChr()
 
@@ -442,11 +544,16 @@ DEFPROC loadBlocks()
   %p(#BLOCKSLEFT)=100
 
   INK 50
+
   PRINT AT 3,21;"CLEARED   0"
-  PRINT AT 4,21;"MOVES     0"
-;   PRINT AT 5,21;"REMAIN  100"
+  PROC pad2(%p(#PLOTPTR)-2) TO s$
+  PRINT AT 4,21;"MOVES   ";s$;%(p(#PLOTPTR)-2)
+  PROC pad2(%p(#BLOCKSLEFT)) TO s$
+  PRINT AT 5,21;"REMAIN  ";s$;%p(#BLOCKSLEFT)
   INK 255
-  PRINT AT 2,21;"SCORE     0"
+  PROC pad4(%p(#SCORE)) TO s$
+  PRINT AT 2,21;"SCORE ";s$;%p(#SCORE)
+
   PROC pad4(%p(#LEVEL)) TO s$
   PRINT AT 7,21;"LEVEL ";s$;%p(#LEVEL)
 
@@ -504,14 +611,6 @@ DEFPROC pad2(%w)
   IF %w < 100 THEN ENDPROC =" "
 ENDPROC =""
 
-DEFPROC onAnyKey()
-  PRINT AT 10,21;"Press key"
-  REPEAT : REPEAT UNTIL INKEY$ =""
-  REPEAT : REPEAT UNTIL INKEY$ <> "" OR ( IN 31=16)
-  REPEAT : REPEAT UNTIL INKEY$ =""
-  PRINT AT 10,21;"         "
-ENDPROC
-
 DEFPROC loadAssets()
   BORDER 0: PAPER 0: CLS
   LOAD "./assets/font.bin" CODE 64000
@@ -540,7 +639,16 @@ DEFPROC loadAssets()
   SPRITE PRINT 1
   SPRITE BORDER 1
 
+  PROC installFX()
+  LOAD "assets/marbles.afb" BANK #BANK_FX
+  DRIVER #DRV_FX,1,#BANK_FX
+
   POKE 23658,0: ; turn off CAPS LOCK (for menu items)
+
+  ; finally try to load high scores (which also empties the bank)
+  b$= STR$ #BANK_REMOTE_SCORES
+  ON ERROR ENDPROC
+  ../assets/httpbank get -h h$ -u /6 -b b$ -7
 ENDPROC
 
 DEFPROC reset()
@@ -628,6 +736,14 @@ DATA 90,99,80,89,70,79,60,69,50,59,40,49,30,39,20,29,10,19,0,9,91,98,81,88,71,78
 9090 .install assets/input.drv
 9100 ON ERROR
 9110 ENDPROC
+
+9120 DEFPROC installFX()
+9130 ON ERROR GO TO 9150
+9140 .uninstall assets/ayfx.drv
+9150 .install assets/ayfx.drv
+9160 ON ERROR
+9170 ENDPROC
+
 
 # error handling needs to be outside a proc
 9200 ERROR TO err,lin,st

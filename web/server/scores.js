@@ -1,58 +1,7 @@
-/** @returns {HTMLElement} */
-const $ = (s) => document.querySelector(s);
-
-/** @type {HTMLCanvasElement} */
-const canvas = $('canvas');
-
-/** @type {CanvasRenderingContext2D} */
-const ctx = canvas.getContext('2d');
+const querystring = require('querystring');
 
 const EMPTY = 16;
-let score = 0;
 const length = 10;
-
-// setup size
-canvas.width = 160;
-canvas.height = 160;
-
-function makeBlock(colour) {
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  canvas.width = 16;
-  canvas.height = 16;
-  ctx.fillStyle = colour;
-  ctx.fillRect(0, 0, 15, 15);
-  return ctx.getImageData(0, 0, 16, 16);
-}
-
-const red = makeBlock('red');
-const green = makeBlock('#00ff00');
-const blue = makeBlock('cyan');
-const yellow = makeBlock('yellow');
-const empty = makeBlock('black');
-
-const blocks = { 1: red, 2: green, 4: blue, 8: yellow, [EMPTY]: empty };
-
-function render(grid) {
-  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  for (let index = 0; index < 100; index++) {
-    const x = index % 10;
-    const y = (index / 10) | 0;
-    const r = grid[index];
-    const value = blocks[r];
-    ctx.putImageData(value, x * 16, y * 16);
-    ctx.fillText(index, x * 16 + 1.5, y * 16 + 10.5, 12);
-  }
-}
-
-function loadEncoded(str) {
-  const input = atob(str);
-  const res = new Uint8Array(input.length);
-  for (let i = 0; i < input.length; i++) {
-    res[i] = input.charCodeAt(i);
-  }
-  return load(res);
-}
 
 class Game {
   grid = [];
@@ -152,7 +101,6 @@ class Game {
   }
 
   clear(i) {
-    console.log(i);
     const grid = this.grid;
     const match = grid[i];
 
@@ -250,12 +198,16 @@ class Game {
 }
 
 function toBytes(str) {
-  const input = atob(str);
-  const res = new Uint8Array(input.length);
-  for (let i = 0; i < input.length; i++) {
-    res[i] = input.charCodeAt(i);
-  }
+  const b = Buffer.from(str, 'base64');
+  const res = Uint8Array.from(b);
+
   return res;
+  // const input = atob(str);
+  // const res = new Uint8Array(input.length);
+  // for (let i = 0; i < input.length; i++) {
+  //   res[i] = input.charCodeAt(i);
+  // }
+  // return res;
 }
 
 function load(input) {
@@ -285,12 +237,112 @@ function load(input) {
     score += m.clear(data[i]);
   }
 
-  render(m.grid);
-
   return {
     name,
     seed,
     score,
-    hex: seed.toString(16).padStart(4, '0'),
+    // hex: `0x${seed.toString(16).padStart(4, '0').toUpperCase()}`,
   };
 }
+
+function encodeScores(scores) {
+  const res = new Uint8Array(scores.length * 7);
+  const view = new DataView(res.buffer);
+  let i = 0;
+  scores.forEach(({ name, seed, score }, i) => {
+    res.set(new TextEncoder().encode(name), i * 7);
+    view.setUint16(i * 7 + 3, seed, true);
+    view.setUint16(i * 7 + 5, score, true);
+  });
+
+  return res;
+}
+
+exports.handler = async (event, context) => {
+  // Only allow POST
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, body: 'Method Not Allowed' };
+  }
+
+  // When the method is POST, the name will no longer be in the event’s
+  // queryStringParameters – it’ll be in the event body encoded as a query string
+  const params = querystring.parse(event.body);
+  const input = toBytes(params.data);
+  const previous = toBytes(params.previous);
+
+  // first validate and generate score
+  const last = load(input);
+
+  // then parse previous for high scores and insert to new position
+  const view = new DataView(previous.buffer);
+  let i = 0;
+  const scores = [];
+  while (i < view.byteLength) {
+    const name = new TextDecoder().decode(view.buffer.slice(i, i + 3));
+    const seed = view.getUint16(i + 3, true);
+    const score = view.getUint16(i + 5, true);
+
+    if (!applied && last.score > score) {
+      scores.push(last);
+      applied = true;
+    }
+
+    scores.push({ name, seed, score });
+    i += 7;
+  }
+
+  const res = encodeScores(scores.slice(0, 10));
+
+  return {
+    statusCode: 200,
+    body: Buffer.from(res).toString('base64'),
+  };
+};
+
+// const last = load(
+//   toBytes('shMeAA4YIkBASlRJUFBRUFBRPV5eSkJMVmFgYGBfW1JSW1JFTQ==')
+// ); // ?
+// let applied = false;
+
+// const prev = Uint8Array.from([
+//   0x52,
+//   0x45,
+//   0x4d,
+//   0xb2,
+//   0x13,
+//   0x58,
+//   0x07,
+//   0x41,
+//   0x42,
+//   0x49,
+//   0x01,
+//   0x00,
+//   0x96,
+//   0x02,
+//   0x52,
+//   0x47,
+//   0x53,
+//   0x01,
+//   0x00,
+//   0xea,
+//   0x02,
+// ]);
+// const view = new DataView(prev.buffer);
+// let i = 0;
+// const scores = [];
+// while (i < view.byteLength) {
+//   const name = new TextDecoder().decode(view.buffer.slice(i, i + 3));
+//   const seed = view.getUint16(i + 3, true);
+//   const score = view.getUint16(i + 5, true);
+
+//   if (!applied && last.score > score) {
+//     scores.push(last);
+//     applied = true;
+//   }
+
+//   scores.push({ name, seed, score });
+//   i += 7;
+// }
+
+// scores.slice(0, 10);
+// Buffer.from(encodeScores(scores)).toString('base64'); // ?

@@ -1,5 +1,8 @@
 # Marbles2 for the Spectrum Next
 
+## Bugs
+
+- [ ] New level init - the scores are zero
 
 ## Credits / thank you
 

@@ -4,13 +4,15 @@ body {
   justify-content: center;
   align-items: center;
   background: black;
+  margin: 0;
 }
 
 canvas {
   display: block;
-  width: min(80vh, 80vw);
+  width: min(96vh, 96vw);
   /* height: 384px; */
   background: black;
   image-rendering: crisp-edges;
   image-rendering: pixelated;
+  /* max-width: calc(100vh); */
 }
