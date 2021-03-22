@@ -83,7 +83,7 @@ ON ERROR GO TO 9200
 
 %p(#DEVICE)=#KEYBAORD
 %p(#SCORE)=0
-%p(#THEME)=%4*5: ; or 2*5
+%p(#THEME)=%5*5: ; or 2*5
 RANDOMIZE
 %p(#SEED)=%1+ RND $ffff
 %p(#BEST)=0
@@ -115,8 +115,8 @@ DEFPROC showHighScores()
   LOCAL %j: ; screen print offset
   LOCAL %k: ; high score position (1..10)
   LOCAL %l: ; whether to print inverted
-  PROC printLayer()
   SPRITE PRINT 0
+  PROC printLayer()
   LAYER 2,1
   PAPER 254: INK 255: BORDER 0
   LOAD "assets/welcome.nxi" LAYER
@@ -126,13 +126,13 @@ DEFPROC showHighScores()
   LAYER PALETTE 0,1,511: ; ink @ 1
   LAYER PALETTE 0,2,511: ;
   LAYER PALETTE 0,3,292: ;
-;   LAYER PALETTE 0,16,0: ; paper black @ 0
+  LAYER PALETTE 0,16,455: ; paper black @ 0
   LAYER PALETTE 0,17,0: ; paper @ 1
   LAYER PALETTE 0,18,146: ; paper @ 2
   LAYER PALETTE 0,19,146: ; paper @ 3
   PALETTE OVER 0: ; L1 transparency
-  BORDER 0
-  PAPER 0
+  BORDER 1
+  PAPER 1
   CLS
   PAPER 1
   INK 2
@@ -160,7 +160,7 @@ DEFPROC showHighScores()
     PRINT "   #";s$;"    ";
     PROC pad4(%s) TO s$
     IF %l=0 THEN INK 2
-    PRINT s$;%s; FLASH 0
+    PRINT s$;%s
     %k=%k+1
 
   REPEAT UNTIL %i=0
@@ -173,16 +173,15 @@ DEFPROC showHighScores()
   REPEAT UNTIL k$="y" OR k$="n" OR ( CODE k$)=13
   REPEAT : REPEAT UNTIL INKEY$ =""
 
-  IF k$="n" THEN PRINT AT 20,18;"   ▀": CLS : PROC gameLayer(): SPRITE PRINT 1: ENDPROC =0
+  IF k$="n" THEN PRINT AT 20,18;"   ▀": CLS : PROC gameLayer(): ENDPROC =0
 
   ; wait loop
   PRINT AT 19,4;"Use cursors keys & enter"
   PRINT AT 20,18;" "
 
-;   BANK n LAYER offset TO [rop] x,y,w,h
   %i=0
   %j=%((i+7)*32)+6144
-  FOR %k=%(j+4) TO %(j+4+24)
+  FOR %k=%(j+4) TO %(j+26)
     %l=% BANK 5 PEEK k
     BANK 5 POKE %k,%(l^128)
   NEXT %k
@@ -195,7 +194,6 @@ DEFPROC showHighScores()
 
   %p(#SEED)=% BANK #BANK_REMOTE_SCORES DPEEK ((i*7)+3): ; seed
 
-  SPRITE PRINT 1
   CLS
   PROC gameLayer()
 ENDPROC =1
@@ -218,7 +216,7 @@ ENDPROC
 DEFPROC highlight(%c,%i)
 
   %j=%((i+7)*32)+6144
-  FOR %k=%(j+4) TO %(j+4+24)
+  FOR %k=%(j+4) TO %(j+26)
     %l=% BANK 5 PEEK k
     BANK 5 POKE %k,%(l^128)
   NEXT %k
@@ -230,7 +228,7 @@ DEFPROC highlight(%c,%i)
 
   ; invert the row
   %j=%((i+7)*32)+6144
-  FOR %k=%(j+4) TO %(j+4+24)
+  FOR %k=%(j+4) TO %(j+26)
     %l=% BANK 5 PEEK k
     BANK 5 POKE %k,%(l^128)
   NEXT %k
@@ -264,7 +262,7 @@ DEFPROC selectInput()
   IF %(#DEVICE)=#JOYSTICK THEN DRIVER 125,2,3
   IF %(#DEVICE)=#KEYBAORD THEN DRIVER 125,2,5
 
-  SPRITE PRINT 1
+;   SPRITE PRINT 1
   CLS
 ENDPROC
 
@@ -390,16 +388,19 @@ DEFPROC gameOver()
   n$="REM"
   BANK #BANKPLOT POKE %p(#PLOTPTR),n$
   %p(#PLOTPTR)=%p(#PLOTPTR)+3
+  %p(#BUSY)=1
   SAVE "last.bnk" BANK #BANKPLOT,0,%p(#PLOTPTR)
 ;   IF %p(#GOT_HIGH_SCORE) THEN
   PROC postHighScore()
 
   REPEAT
-;     PROC readInput()
+    PROC readInput()
     IF %j&7=0 THEN : BANK #BANKGFX_B LAYER %(2560*i) TO 6,22,20,2:%i=%(i+1) MOD 4
     %j=%j+1
     i$= INKEY$
   REPEAT UNTIL (i$="r") OR (i$="n") OR (i$="e")
+
+  %p(#BUSY)=0
 
   ; clear the section that showed game over
   BANK 11 ERASE 12288,4096,0
@@ -699,7 +700,7 @@ DEFPROC loadAssets()
 
   LOAD "assets/marbles.spr" BANK #BANKSPR
   SPRITE BANK #BANKSPR
-  SPRITE PRINT 1
+;   SPRITE PRINT 1
   SPRITE BORDER 1
 
   PROC installFX()
