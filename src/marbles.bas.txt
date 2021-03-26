@@ -26,6 +26,7 @@ ON ERROR GO TO 9200
 #define BANK_FX=24
 #define BANK_REMOTE_SCORES=25
 #define BANK_LOCAL_SCORES=26
+#define BANK_UNDO=27
 
 #define DRV_FX=49
 
@@ -38,10 +39,10 @@ ON ERROR GO TO 9200
 # high score structure
 # name[3]
 # seed[2]
-# score[...]
-# 0 byte terminator
+# score[2]
+# [...]
 
-# set debug bank to 21 to load predefined sequence
+# set debug bank to non zero to load predefined sequence
 #define BANKDEBUG=0
 
 ; bank graphic offsets
@@ -98,6 +99,7 @@ PAUSE 0
 
 DEFPROC mainLoop()
   REPEAT
+    PROC setGameBorder()
     PROC selectInput()
     PROC showHighScores() TO %i
     IF %i=0 THEN PROC replayGame(): ELSE : PROC startGame(%p(#SEED))
@@ -110,30 +112,32 @@ DEFPROC mainLoop()
   REPEAT UNTIL 0
 ENDPROC
 
+DEFPROC setGameBorder()
+  PROC printLayer()
+  SPRITE PRINT 0
+  CLS
+  LAYER 2,1
+  PAPER 254: INK 255
+  LOAD "assets/welcome.nxi" LAYER
+  LAYER 1,1
+ENDPROC
+
 DEFPROC showHighScores()
   LOCAL %i: ; memory peek position
   LOCAL %j: ; screen print offset
   LOCAL %k: ; high score position (1..10)
   LOCAL %l: ; whether to print inverted
   SPRITE PRINT 0
+  BORDER 0
   PROC printLayer()
-  LAYER 2,1
-  PAPER 254: INK 255: BORDER 0
-  LOAD "assets/welcome.nxi" LAYER
 
-  LAYER 1,1
-  LAYER PALETTE 0,0,455: ; transparent @ 0
-  LAYER PALETTE 0,1,511: ; ink @ 1
-  LAYER PALETTE 0,2,511: ;
-  LAYER PALETTE 0,3,292: ;
-  LAYER PALETTE 0,16,455: ; paper black @ 0
-  LAYER PALETTE 0,17,0: ; paper @ 1
-  LAYER PALETTE 0,18,146: ; paper @ 2
-  LAYER PALETTE 0,19,146: ; paper @ 3
-  PALETTE OVER 0: ; L1 transparency
-  BORDER 1
-  PAPER 1
   CLS
+;
+;   LAYER 2,1
+;   PAPER 254: INK 255
+;   LOAD "assets/welcome.nxi" LAYER
+;   LAYER 1,1
+;
   PAPER 1
   INK 2
   PRINT AT 5,11;"HIGH SCORES"
@@ -203,14 +207,12 @@ DEFPROC gameLayer()
   LAYER 2,1
   PALETTE OVER 227
   CLS
-
 ENDPROC
 
 DEFPROC printLayer()
   LAYER OVER 0
   LAYER 1,1
   PALETTE OVER 0
-  CLS
 ENDPROC
 
 DEFPROC highlight(%c,%i)
@@ -235,11 +237,9 @@ DEFPROC highlight(%c,%i)
 ENDPROC =%i
 
 DEFPROC selectInput()
-  SPRITE PRINT 0
   CLS
 
-  PAPER 254: INK 255: BORDER 0
-  LOAD "assets/welcome.nxi" LAYER
+  LAYER 1,1
 
   ; settings loop
   PROC printSettings()
@@ -263,10 +263,11 @@ DEFPROC selectInput()
   IF %(#DEVICE)=#KEYBAORD THEN DRIVER 125,2,5
 
 ;   SPRITE PRINT 1
-  CLS
+;   CLS
 ENDPROC
 
 DEFPROC printSettings()
+  INK 1
   PRINT AT 5,8;"Select your input"
   DIM j$(3,18)
   j$(1)="1. Mouse"
@@ -298,6 +299,7 @@ DEFPROC readJoystick()
 ENDPROC
 
 DEFPROC select()
+  IF %p(#BUSY) THEN ENDPROC
   %i=%( SPRITE OVER (#POINTER,1 TO 100)): ; which block are we over when we selected
 
   ; colliding 0 sprite returns 128 (can't remember why though!)
@@ -305,8 +307,6 @@ DEFPROC select()
 
   IF %i=0 THEN ENDPROC
   IF %i > 99 THEN ENDPROC : ; out of scope
-
-  IF %p(#BUSY) THEN ENDPROC
 
   %i=%i-1
   PROC selectBlock()
@@ -348,7 +348,7 @@ DEFPROC selectBlock()
   INK 50
   PROC pad2(%c) TO s$
   PRINT AT 3,21;"CLEARED ";s$;%c
-  PROC pad2(%p(#PLOTPTR)-2) TO s$
+  PROC pad2(%p(#PLOTPTR)-4) TO s$
   PRINT AT 4,21;"MOVES   ";s$;%(p(#PLOTPTR)-4)
   PROC pad2(%p(#BLOCKSLEFT)) TO s$
   PRINT AT 5,21;"REMAIN  ";s$;%p(#BLOCKSLEFT)
@@ -363,15 +363,23 @@ DEFPROC selectBlock()
     %i=% BANK #BANKLIB PEEK c
     IF %i < 255 THEN %i=%i+p(#THEME): ELSE %i=#EMPTY
     SPRITE %c+1,,,%i,
-
-    ; slow down the render a little
-
   REPEAT UNTIL %c=0
 
   %p(#BUSY)=0
 
   IF %( BANK #BANKLIB PEEK #M_CANMOVE)=0 THEN %p(#BUSY)=1: PAUSE 10: PROC gameOver()
   IF %p(#BLOCKSLEFT)=0 THEN PROC nextLevel()
+
+ENDPROC
+
+DEFPROC captureUndo()
+  LOCAL %o
+  %o=%(p(#PLOTPTR)-4)*100
+  BANK #BANKLIB COPY 0,100 TO #BANK_UNDO,%o
+  BANK #BANK_UNDO DPOKE 100,%p(#SCORE),%p(#BLOCKSLEFT)
+ENDPROC
+
+DEFPROC undo()
 
 ENDPROC
 
@@ -394,10 +402,9 @@ DEFPROC gameOver()
   PROC postHighScore()
 
   REPEAT
-    PROC readInput()
     IF %j&7=0 THEN : BANK #BANKGFX_B LAYER %(2560*i) TO 6,22,20,2:%i=%(i+1) MOD 4
     %j=%j+1
-    i$= INKEY$
+    PROC readInput(): ; i$ is assigned in readInput
   REPEAT UNTIL (i$="r") OR (i$="n") OR (i$="e")
 
   %p(#BUSY)=0
@@ -685,13 +692,7 @@ DEFPROC loadAssets()
   LOAD "assets/marbles.pal" BANK #BANKPAL
   LAYER PALETTE 0 BANK #BANKPAL,0
 
-  ; load L1 with our palette, but make a small tweak
-  LAYER 1,1
-  LAYER PALETTE 0,0,455: ; transparent @ 0
-  LAYER PALETTE 0,1,292: ; grey @ 1
-  LAYER PALETTE 0,2,511: ; white @ 2
-  LAYER PALETTE 0,3,0: ; black @ 3
-  PALETTE OVER 0: ; L1 index 1 is transparent
+  PROC configureL1Pal()
 
   LAYER 2,1
   SPRITE PALETTE 0 BANK #BANKPAL,0
@@ -713,6 +714,22 @@ DEFPROC loadAssets()
   b$= STR$ #BANK_REMOTE_SCORES
   ON ERROR ENDPROC
   ../assets/httpbank get -h h$ -u /6 -b b$ -7
+ENDPROC
+
+DEFPROC configureL1Pal()
+  ; load L1 with our palette, but make a small tweak
+  LAYER 1,1
+  LAYER PALETTE 0,0,0: ; ink @ 0 = black (default)
+  LAYER PALETTE 0,1,511: ; ink @ 1 = white
+  LAYER PALETTE 0,2,511: ; ink @ 2 = white
+  LAYER PALETTE 0,3,292: ; ink @ 3 = grey
+  LAYER PALETTE 0,7,455: ; transparent @ 7
+  LAYER PALETTE 0,23,455: ; paper black @ 7
+  LAYER PALETTE 0,17,0: ; paper @ 1
+  LAYER PALETTE 0,18,146: ; paper @ 2 = dark grey
+  LAYER PALETTE 0,19,146: ; paper @ 3 = dark grey
+  PALETTE OVER 0: ; L1 transparency @ 0 (black)
+  PAPER 1: ; black background
 ENDPROC
 
 DEFPROC reset()
