@@ -1,3 +1,42 @@
+; ------------------------------------------------------------------------------
+; Created by Remy Sharp
+; Last significant changes: 2021-03-27
+; Game: https://remysharp.itch.io/marbles2
+; ------------------------------------------------------------------------------
+;
+; This is the marbles2 game logic library.
+;
+; The NextBASIC specific entry points are prefixed with NB* and the intention is
+; that the entire game is initialised from NextBASIC and then then block to tag
+; is selected, the value inserted into memory (at NBTagIndex) and then NBTag is
+; called.
+;
+; This library actually contains *two* grids that represents the game. This is
+; because one grid is optimised for rendering and the other is optimised for
+; game logic, such as block clearing and column shifting. The idea being that
+; NextBASIC uses the GRID_SIMPLIFIED positioned at program$0 (if loaded in a
+; bank, it'll be the first 100 bytes) - this is the sequential 100 blocks.
+;
+; At program$100 you find GRID_START which is the grid rendered in a array of
+; column data at 16byte intervals. This means that at GRID_START you'll find
+; 10 bytes then 6 $FF values that pad out.
+;
+; So if the GRID_SIMPLIFIED were rendered as:
+; 0 1 0
+; 2 1 3
+; 3 3 3
+;
+; In GRID_START it would be (padded to 4 bytes in this example)
+;
+; 3 2 0 FF
+; 3 1 1 FF
+; 3 3 0 FF
+;
+; This orientation is designed to support quick jumping through the columns of
+; blocks.
+;
+; ------------------------------------------------------------------------------
+
 	DEVICE ZXSPECTRUM48
 	SLDOPT COMMENT WPMEM, LOGPOINT, ASSERTION
 
@@ -561,7 +600,7 @@ Main:						; note that main is sitting on 0xA0 in the memory bank
 	call InitGraphics
 
 	call ResetTagCount
-	call RunSequence
+	; call RunSequence
 	call RenderGrid
 
 .readInput
