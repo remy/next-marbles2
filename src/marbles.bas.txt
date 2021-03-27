@@ -75,6 +75,8 @@ ON ERROR GO TO 9200
 #define LEVEL=9
 #define LOAD_PATTERN=10
 #define GOT_HIGH_SCORE=11
+#define UNDO_PTR=12
+#define LAST_CLEARED=13
 
 #define MOUSE=1
 #define JOYSTICK=2
@@ -88,6 +90,7 @@ ON ERROR GO TO 9200
 RANDOMIZE
 %p(#SEED)=%1+ RND $ffff
 %p(#BEST)=0
+%p(#UNDO_PTR)=0
 
 h$="data.remysharp.com"
 
@@ -108,6 +111,7 @@ DEFPROC mainLoop()
       PROC readInput()
       IF i$="r" THEN PROC replayGame()
       IF i$="n" THEN PROC newGame()
+      IF i$="u" THEN PROC undo()
     REPEAT UNTIL i$="e"
   REPEAT UNTIL 0
 ENDPROC
@@ -306,7 +310,7 @@ DEFPROC select()
   IF %i=128 THEN %i=0
 
   IF %i=0 THEN ENDPROC
-  IF %i > 99 THEN ENDPROC : ; out of scope
+  IF %i > 100 THEN ENDPROC : ; out of scope
 
   %i=%i-1
   PROC selectBlock()
@@ -319,6 +323,7 @@ DEFPROC selectBlock()
   IF %p(#BUSY) THEN ENDPROC
 
   %p(#BUSY)=1
+  PROC captureUndo()
 
   ; load %i into tagIndex
   BANK #BANKLIB POKE #M_TAGINDEX,%i
@@ -333,6 +338,7 @@ DEFPROC selectBlock()
   DRIVER #DRV_FX,2,1: ; play the "clack" sound
 
   %p(#SCORE)=%p(#SCORE)+(c*(5+c))
+  %p(#LAST_CLEARED)=%c
   %p(#BLOCKSLEFT)=%p(#BLOCKSLEFT)-c
   BANK #BANKPLOT POKE %p(#PLOTPTR),%i: ; store the block cleared
   %p(#PLOTPTR)=%p(#PLOTPTR)+1
@@ -373,14 +379,58 @@ DEFPROC selectBlock()
 ENDPROC
 
 DEFPROC captureUndo()
-  LOCAL %o
-  %o=%(p(#PLOTPTR)-4)*100
-  BANK #BANKLIB COPY 0,100 TO #BANK_UNDO,%o
-  BANK #BANK_UNDO DPOKE 100,%p(#SCORE),%p(#BLOCKSLEFT)
+  BANK #BANKLIB COPY 0,100 TO #BANK_UNDO,%p(#UNDO_PTR)
+  BANK #BANK_UNDO DPOKE %(p(#UNDO_PTR)+100),%p(#SCORE),%p(#BLOCKSLEFT),%p(#LAST_CLEARED)
+  %p(#UNDO_PTR)=%p(#UNDO_PTR)+106
 ENDPROC
 
 DEFPROC undo()
+  IF %p(#UNDO_PTR)=0 THEN ENDPROC : ; no more undo
+  IF %p(#BUSY) THEN ENDPROC
 
+  LOCAL %o
+  LOCAL %i
+  LOCAL %c
+
+  %p(#BUSY)=1
+
+  %o=%p(#UNDO_PTR)-106
+
+  ; reset undo position
+  %p(#UNDO_PTR)=%o
+
+  ; restore state
+  BANK #BANK_UNDO COPY %o,100 TO #BANKLIB,0
+  %p(#SCORE)=% BANK #BANK_UNDO DPEEK (o+100)
+  %p(#BLOCKSLEFT)=% BANK #BANK_UNDO DPEEK (o+102)
+  %p(#LAST_CLEARED)=% BANK #BANK_UNDO DPEEK (o+104)
+  %p(#PLOTPTR)=%p(#PLOTPTR)-1
+  BANK #BANKPLOT DPOKE 2,%(p(#PLOTPTR)-4)
+
+  ; print game stats
+  INK 255
+  PROC pad4(%p(#SCORE)) TO s$
+  PRINT AT 2,21;"SCORE ";s$;%p(#SCORE)
+  INK 50
+
+  PROC pad2(%p(#LAST_CLEARED)) TO s$
+  PRINT AT 3,21;"CLEARED ";s$;%p(#LAST_CLEARED)
+
+  PROC pad2(%p(#PLOTPTR)-4) TO s$
+  PRINT AT 4,21;"MOVES   ";s$;%(p(#PLOTPTR)-4)
+  PROC pad2(%p(#BLOCKSLEFT)) TO s$
+  PRINT AT 5,21;"REMAIN  ";s$;%p(#BLOCKSLEFT)
+
+  ; render
+  %c=100
+  REPEAT
+    %c=%c-1
+    %i=% BANK #BANKLIB PEEK c
+    IF %i < 255 THEN %i=%i+p(#THEME): ELSE %i=#EMPTY
+    SPRITE %c+1,,,%i,
+  REPEAT UNTIL %c=0
+
+  %p(#BUSY)=0
 ENDPROC
 
 DEFPROC gameOver()
@@ -496,6 +546,8 @@ DEFPROC startGame(%s)
   %p(#LEVEL)=1
   %p(#SCORE)=0
   %p(#BUSY)=0
+  %p(#LAST_CLEARED)=0
+  %p(#UNDO_PTR)=0
   %p(#GOT_HIGH_SCORE)=0
   BANK #BANKPLOT ERASE %$7f
   BANK #BANKPLOT DPOKE 0,%s: ; first 16bit word is the seed
@@ -580,6 +632,7 @@ DEFPROC newGame()
 
   PROC fromHex(c$) TO %s: ; convert the text to a numeric value
   IF %s=0 THEN %s=1
+
   PROC startGame(%s)
 ENDPROC
 
@@ -606,7 +659,7 @@ DEFPROC loadBlocks()
 
   PRINT AT 3,21;"CLEARED   0"
   PROC pad2(%p(#PLOTPTR)-2) TO s$
-  PRINT AT 4,21;"MOVES   ";s$;%(p(#PLOTPTR)-2)
+  PRINT AT 4,21;"MOVES   ";s$;%(p(#PLOTPTR)-4)
   PROC pad2(%p(#BLOCKSLEFT)) TO s$
   PRINT AT 5,21;"REMAIN  ";s$;%p(#BLOCKSLEFT)
   INK 255
@@ -694,6 +747,8 @@ DEFPROC loadAssets()
 
   PROC configureL1Pal()
 
+  BANK #BANK_UNDO ERASE 170
+
   LAYER 2,1
   SPRITE PALETTE 0 BANK #BANKPAL,0
   ; custom black and white
@@ -701,7 +756,6 @@ DEFPROC loadAssets()
 
   LOAD "assets/marbles.spr" BANK #BANKSPR
   SPRITE BANK #BANKSPR
-;   SPRITE PRINT 1
   SPRITE BORDER 1
 
   PROC installFX()

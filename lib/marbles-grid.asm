@@ -163,6 +163,7 @@ NBPopulateGrid:
 NBTag:
 	ld a, 0
 	call IndexToMemoryOffset
+	call RestoreSimplifiedGrid
 	jp Tag					; note: no ret required as Tag has a ret
 
 NBTagIndex EQU NBTag+1				; address of byte to modify from NextBASIC
@@ -538,6 +539,48 @@ ResetTagCount:
 	xor a					; set A to zero and then put that in the  TAG_COUNT
 	ld (bc), a
 	ret
+
+;
+; Takes the 100 bytes in GRID_SIMPLIFIED and transposes them into the GRID_START
+; data structure
+RestoreSimplifiedGrid:
+	push af
+	exx
+
+	;; fill the GRID_START with $ff
+	ld bc, 16*10
+	ld hl, GRID_START
+	ld de, GRID_START + 1
+	ld (hl), $ff
+	ldir
+
+	ld hl, GRID_SIMPLIFIED
+	ld c, 10				; column counter
+
+.columnLoop
+	ld d, HIGH GRID_START			; GRID_START row select
+	ld b, 10
+	ld e, c
+	dec e
+	; dec e
+
+.rowLoop
+	ld a, (hl)
+	inc hl
+
+	ld (de), a
+	ld a, 16
+	add a, e
+	ld e, a					; select next row
+
+	djnz .rowLoop
+	dec c
+	jr nz, .columnLoop
+
+	exx
+	pop af
+	ret
+
 
 ;
 ; Modifies: AF, BC, DE, L
