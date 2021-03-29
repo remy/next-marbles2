@@ -18,7 +18,7 @@ ON ERROR GO TO 9200
 #define BANKPAL=15
 #define BANKSPR=16
 #define BANKRND=17
-#define BANKNEXTLEVEL=18
+; #define BANKNEXTLEVEL=18
 #define BANKPLOT=19
 #define BANKLIB=20
 #define BANKGFX_A=22
@@ -46,9 +46,9 @@ ON ERROR GO TO 9200
 #define BANKDEBUG=0
 
 ; bank graphic offsets
-#define OFFSET_BUTTONS=0
-#define OFFSET_NEW_GAME_BOX=5120
-#define OFFSET_NEXT_LEVEL=10880
+#define OFFSET_CONTROLS=0
+#define OFFSET_NEW_GAME_BOX=5632
+#define OFFSET_NEXT_LEVEL=11392
 #define OFFSET_GAME_OVER=0
 
 ; entry points in the marbles.bin library for methods and method constants
@@ -127,6 +127,14 @@ DEFPROC setGameBorder()
 ENDPROC
 
 DEFPROC showHighScores()
+  b$= STR$ #BANK_REMOTE_SCORES
+  ON ERROR ENDPROC =0: ; fixme - do some kind of error handling
+  ../assets/httpbank get -h h$ -u /6 -b b$ -7
+  PROC renderHighScores() TO %i
+ENDPROC =%i
+
+DEFPROC renderHighScores()
+
   LOCAL %i: ; memory peek position
   LOCAL %j: ; screen print offset
   LOCAL %k: ; high score position (1..10)
@@ -386,7 +394,7 @@ DEFPROC captureUndo()
 ENDPROC
 
 DEFPROC undo()
-  IF %p(#UNDO_PTR)=0 THEN ENDPROC : ; no more undo
+  IF %p(#UNDO_PTR) <= 106 THEN ENDPROC : ; no more undo
   IF %p(#BUSY) THEN ENDPROC
 
   LOCAL %o
@@ -674,7 +682,7 @@ DEFPROC loadBlocks()
   PROC pad4(%p(#LEVEL)) TO s$
   PRINT AT 7,21;"LEVEL ";s$;%p(#LEVEL)
 
-  BANK #BANKGFX_A LAYER #OFFSET_BUTTONS TO 22,14,10,8
+  BANK #BANKGFX_A LAYER #OFFSET_CONTROLS TO 21,13,11,8
 
   ; call PopulateGrid
   %n=% BANK #BANKLIB USR #M_FN_POPULATEGRID
@@ -739,10 +747,10 @@ DEFPROC loadAssets()
   PRINT CHR$ 2: ; trigger the font to also be loaded on layer 2
 
 
-  LOAD "assets/over-next-level.bin" BANK #BANKNEXTLEVEL
-  LOAD "assets/buttons.nxi" BANK #BANKGFX_A,#OFFSET_BUTTONS,5120
+;   LOAD "assets/over-next-level.nxi" BANK #BANKNEXTLEVEL
+  LOAD "assets/controls.nxi" BANK #BANKGFX_A,#OFFSET_CONTROLS,5632
   LOAD "assets/new-game.nxi" BANK #BANKGFX_A,#OFFSET_NEW_GAME_BOX,5760
-  LOAD "assets/next-level-small.nxi" BANK #BANKGFX_A,#OFFSET_NEXT_LEVEL,3840: ; sum = 15680
+  LOAD "assets/next-level-small.nxi" BANK #BANKGFX_A,#OFFSET_NEXT_LEVEL,3840
   LOAD "assets/game-over.nxi" BANK #BANKGFX_B,#OFFSET_GAME_OVER,10240
 
   ; marbles library
@@ -770,11 +778,6 @@ DEFPROC loadAssets()
   DRIVER #DRV_FX,1,#BANK_FX
 
   POKE 23658,0: ; turn off CAPS LOCK (for menu items)
-
-  ; finally try to load high scores (which also empties the bank)
-  b$= STR$ #BANK_REMOTE_SCORES
-  ON ERROR ENDPROC
-  ../assets/httpbank get -h h$ -u /6 -b b$ -7
 ENDPROC
 
 DEFPROC configureL1Pal()

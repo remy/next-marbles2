@@ -1,0 +1,30 @@
+#autoline 10
+
+RUN AT 3
+
+; 0-15 = 8 normal + 8 bright
+; 16-31 = 8 normal paper + 8 bright paper
+
+LAYER 1,1
+LAYER PALETTE 0,0,455: ; transparent @ 0
+LAYER PALETTE 0,1,0: ; grey @ 1
+LAYER PALETTE 0,2,511: ; white @ 2
+LAYER PALETTE 0,3,292: ; black @ 3
+LAYER PALETTE 0,9,%$100: ; red @ bright 1
+LAYER PALETTE 0,10,511: ; red @ bright 2
+;   LAYER PALETTE 0,16,0: ; paper black @ 0
+LAYER PALETTE 0,17,0: ; paper black @ 1
+LAYER PALETTE 0,18,292: ; paper black @ 2
+LAYER PALETTE 0,19,292: ; paper black @ 3
+LAYER PALETTE 0,23,292: ; border black @ 0
+LAYER PALETTE 0,25,%$100: ; paper bright 1 / red
+LAYER PALETTE 0,26,511: ; red @ bright 2
+PALETTE OVER 0: ; L1 transparency
+BORDER 1
+PAPER 0
+CLS
+PAPER 1
+INK 2
+PRINT AT 5,11; FLASH 1;"HIGH"; BRIGHT 1;" SCORES"
+
+PAUSE 0

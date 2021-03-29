@@ -1,0 +1,69 @@
+#program index
+#autoline 1
+
+RUN AT 3
+; uses .extract to extract a file and loop through the contained files
+; loading each item into a bank
+
+CLEAR 65239: ; 128 bytes to play with
+; f$ = filename
+f$="index.bas"
+%o=0
+
+REPEAT
+  PROC hasMore() TO %i
+  WHILE %i
+  PROC loadHeader()
+  PROC getLength() TO %l: PRINT "total length: ";%l
+  PROC getType() TO %t: PRINT "type: ";%t
+  PROC getStart() TO %s: PRINT "autostart: ";%s
+  PROC getDataLength() TO %d: PRINT "data length: ";%d
+
+  IF %t=3 THEN PROC loadIntoBank()
+
+  PROC prepareNext()
+REPEAT UNTIL 0
+
+PROC ended()
+
+STOP
+
+DEFPROC prepareNext()
+  PROC getLength() TO %i
+  %o=%o+i
+ENDPROC
+
+DEFPROC loadIntoBank()
+  s=%s
+  d=%d
+  c$=f$+" +"+ STR$ (o+128)+" "+d+" -mb "+s
+  .$ extract c$
+ENDPROC
+
+DEFPROC ended()
+  PRINT "Fin"
+
+  PAUSE 0
+ENDPROC
+
+DEFPROC loadHeader()
+  o=%o
+  PROC hasMore() TO %i
+  IF %i=0 THEN PROC ended(): ENDPROC
+  c$=f$+" +"+ STR$ o+" 128 -m 65268"
+  .$ extract c$
+ENDPROC
+
+DEFPROC getLength(): ENDPROC =% DPEEK (65268+11): ; technically this is 4 bytes long, but if it is, we're screwed anyway
+DEFPROC getType(): ENDPROC =% PEEK (65268+15)
+DEFPROC getDataLength(): ENDPROC =% DPEEK (65268+16)
+DEFPROC getStart(): ENDPROC =% DPEEK (65268+18)
+
+#autoline
+9000 DEFPROC hasMore()
+9005 o=%o
+9010 c$=f$+" +"+ STR$ o+" 1 -m 65268"
+9020 ON ERROR ENDPROC =0
+9030 .$ extract c$
+9040 ON ERROR
+9050 ENDPROC =1

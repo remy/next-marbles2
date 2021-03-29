@@ -1,0 +1,10 @@
+#autoline 10
+.httpbank
+PAUSE 0
+.httpbank -b 20 -h 192.168.1.118 -p 8000 -u /test.txt
+REPEAT
+  b=% BANK 20 PEEK a
+  IF b=10 THEN PRINT : ELSE PRINT CHR$ b;
+  %a=%a+1
+REPEAT UNTIL b=0
+PAUSE 0

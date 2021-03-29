@@ -16,9 +16,8 @@
         "vsyncInterrupt": true,
         "memoryModel": "ZX48K"
       },
-      "rootFolder": "${workspceFolder}",
-      // "tmpDir": "${fileDirname}",
-      "tmpDir": "${workspceFolder}",
+      "rootFolder": "${workspaceFolder}",
+      "tmpDir": "${workspaceFolder}",
       "sjasmplus": [
         {
           "path": "${fileDirname}/${fileBasenameNoExtension}.sld",
@@ -30,7 +29,9 @@
       "disassemblerArgs": {
         "esxdosRst": true
       },
-      "commandsAfterLaunch": ["-assertion enable"],
+      "topOfStack": "0x5d56",
+
+      "commandsAfterLaunch": ["-assertion enable", "-rmv"],
       "load": "${fileDirname}/${fileBasenameNoExtension}.sna",
       "startAutomatically": true,
       "preLaunchTask": "snabuild"
@@ -48,7 +49,7 @@
         "vsyncInterrupt": true,
         "memoryModel": "ZXNEXT"
       },
-      "rootFolder": "${workspceFolder}",
+      "rootFolder": "${workspaceFolder}",
       "sjasmplus": [
         {
           "path": "${fileDirname}/${fileBasenameNoExtension}.sld",
