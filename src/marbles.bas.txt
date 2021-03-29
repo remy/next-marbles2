@@ -323,7 +323,6 @@ DEFPROC selectBlock()
   IF %p(#BUSY) THEN ENDPROC
 
   %p(#BUSY)=1
-  PROC captureUndo()
 
   ; load %i into tagIndex
   BANK #BANKLIB POKE #M_TAGINDEX,%i
@@ -345,6 +344,8 @@ DEFPROC selectBlock()
   BANK #BANKPLOT DPOKE 2,%p(#PLOTPTR)-4: ; add the count of moves to the data
 
   IF %p(#SCORE) > p(#BEST) THEN %p(#BEST)=%p(#SCORE):%p(#GOT_HIGH_SCORE)=1
+
+  PROC captureUndo()
 
   ; clear the tagged blocks
   FOR %i=1 TO %c
@@ -394,10 +395,14 @@ DEFPROC undo()
 
   %p(#BUSY)=1
 
-  %o=%p(#UNDO_PTR)-106
+  ; this looks weird because it's 2 undo states, but it's because the tip is
+  ; inclusive of the latest change, so moving back one state is 106 bytes, which
+  ; is at the start of the current state, and once more takes us to the previous
+  ; state, then we save the point to the end of that.
+  %o=%p(#UNDO_PTR)-(106*2)
 
   ; reset undo position
-  %p(#UNDO_PTR)=%o
+  %p(#UNDO_PTR)=%(o+106)
 
   ; restore state
   BANK #BANK_UNDO COPY %o,100 TO #BANKLIB,0
@@ -440,7 +445,7 @@ DEFPROC gameOver()
   %j=0
   i$=""
 
-    DRIVER #DRV_FX,2,0
+  DRIVER #DRV_FX,2,0
 
   ; save their last game to disk
   n$="REM"
@@ -673,6 +678,8 @@ DEFPROC loadBlocks()
 
   ; call PopulateGrid
   %n=% BANK #BANKLIB USR #M_FN_POPULATEGRID
+
+  PROC captureUndo()
 
   IF %p(#LOAD_PATTERN)=6 THEN RESTORE :%p(#LOAD_PATTERN)=0
   %p(#LOAD_PATTERN)=%p(#LOAD_PATTERN)+1
