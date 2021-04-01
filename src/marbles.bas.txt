@@ -102,7 +102,7 @@ PAUSE 0
 
 DEFPROC mainLoop()
   REPEAT
-    PROC setGameBorder()
+;     PROC setGameBorder()
     PROC selectInput()
     PROC showHighScores() TO %i
     IF %i=0 THEN PROC replayGame(): ELSE : PROC startGame(%p(#SEED))
@@ -144,12 +144,7 @@ DEFPROC renderHighScores()
   PROC printLayer()
 
   CLS
-;
-;   LAYER 2,1
-;   PAPER 254: INK 255
-;   LOAD "assets/welcome.nxi" LAYER
-;   LAYER 1,1
-;
+
   PAPER 1
   INK 2
   PRINT AT 5,11;"HIGH SCORES"
@@ -534,6 +529,7 @@ ENDPROC =%r
 
 DEFPROC nextLevel()
   %p(#LEVEL)=%p(#LEVEL)+1
+  %p(#UNDO_PTR)=0: ; reset the undo
 
   ; show Next Level box
   BANK #BANKGFX_A LAYER #OFFSET_NEXT_LEVEL TO 5,9,10,6
@@ -739,15 +735,21 @@ DEFPROC pad2(%w)
 ENDPROC =""
 
 DEFPROC loadAssets()
+  ; ; show the border right away
   BORDER 0: PAPER 0: CLS
-  LAYER 1,1
+  ; shadow L2 ends at 14, so we start at 15
+  LAYER 2,1
+  LOAD "assets/marbles.pal" BANK #BANKPAL
+  LAYER PALETTE 0 BANK #BANKPAL,0
+
+  PROC configureL1Pal()
+  PROC setGameBorder()
+  SPRITE PALETTE 0 BANK #BANKPAL,0
+
   LOAD "./assets/font.bin" CODE 64000
   DPOKE 23606,63744: ; 64000-256 (256 = 8 * 32 control chars)
-  LAYER 2,1
   PRINT CHR$ 2: ; trigger the font to also be loaded on layer 2
 
-
-;   LOAD "assets/over-next-level.nxi" BANK #BANKNEXTLEVEL
   LOAD "assets/controls.nxi" BANK #BANKGFX_A,#OFFSET_CONTROLS,5632
   LOAD "assets/new-game.nxi" BANK #BANKGFX_A,#OFFSET_NEW_GAME_BOX,5760
   LOAD "assets/next-level-small.nxi" BANK #BANKGFX_A,#OFFSET_NEXT_LEVEL,3840
@@ -756,18 +758,7 @@ DEFPROC loadAssets()
   ; marbles library
   LOAD "assets/marbles.bin" BANK #BANKLIB
 
-  ; shadow L2 ends at 14, so we start at 15
-  LOAD "assets/marbles.pal" BANK #BANKPAL
-  LAYER PALETTE 0 BANK #BANKPAL,0
-
-  PROC configureL1Pal()
-
-  BANK #BANK_UNDO ERASE 170
-
-  LAYER 2,1
-  SPRITE PALETTE 0 BANK #BANKPAL,0
-  ; custom black and white
-  BORDER 0: INK 255: PAPER 254: CLS
+  BANK #BANK_UNDO ERASE %$AA
 
   LOAD "assets/marbles.spr" BANK #BANKSPR
   SPRITE BANK #BANKSPR
@@ -778,6 +769,8 @@ DEFPROC loadAssets()
   DRIVER #DRV_FX,1,#BANK_FX
 
   POKE 23658,0: ; turn off CAPS LOCK (for menu items)
+
+  LAYER 1,1
 ENDPROC
 
 DEFPROC configureL1Pal()
