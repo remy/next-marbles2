@@ -1,3 +1,5 @@
+	OPT reset --syntax=abfw --zxnext ;=cspect
+
 ; ------------------------------------------------------------------------------
 ; Created by Remy Sharp
 ; Last significant changes: 2021-03-27
@@ -60,11 +62,11 @@ Start:
 
 GRID_SIMPLIFIED:
 	BLOCK 100, EMPTY			; block out 16x16 grid (but we only use 10x10)
-	ALIGN 128, $ff
+	ALIGN 128, $AA
 GRID_INDEX_LOOKUP:
 	INCLUDE "./marbles-grid-memory.inc.asm"
 
-	ALIGN 128, $ff				; pad up to the next $ff with ee - so I can spot it in memory
+	ALIGN 128, $AA				; pad up to the next $ff with ee - so I can spot it in memory
 
 GRID_START:
 	BLOCK 16*11, EMPTY			; block out 16x16 grid (but we only use 10x10) aligned to $c100
@@ -101,7 +103,6 @@ Random
 
 	ld (Random+1), hl			; now update the seed
 	ret
-
 
 ;
 ; NextBASIC public API - Populate the 100x100 grid with initial values
@@ -445,6 +446,7 @@ Fall:
 ;
 ; A = block index to tag
 ; H = block value with TAGGED applied (i.e. +8)
+; BC <- value at TAG_COUNT
 ; Modifies: AF, DE, HL
 TagBlock:
 	push hl
@@ -611,11 +613,43 @@ StoreSimplifyGrid:
 	djnz .outer
 	ret
 
+; Finds the min and max block index and stores in B and C respectively
+;
+; BC <- min << 8 + max
+; Modifies: (all) AF, HL, BC, DE
+NBMinMax:
+	ld hl, TAG_COUNT
+	ld b, (hl)
+	ld hl, TAGGED_LIST
+	ld d, $ff
+	ld e, $0
+.loop
+	ld a, (hl)
+	ld c, a					; use this copy when storing
+
+.lt
+	cp d					; if a >= d then skip
+	;; if a = 10, and d = 11 - then carry and save
+	jr nc, .gt				; else save to d
+	ld d, c
+.gt
+	ld a, c
+	cp e					; if a <= e then skip
+	;; if a = 10, and e = 9,
+	jr c, .cont
+	ld e, c
+.cont
+	inc hl
+	djnz .loop
+	ld b, d
+	ld c, e
+	ret
+
 ; block types/state
 EMPTY	EQU -1
 TAGGED	EQU 8					; used as a mask
 
-	ALIGN 256				; following 3 blocks need to be on an aligned by in memory
+	ALIGN 256, $AA				; following 3 blocks need to be on an aligned by in memory
 						; specifically as I use `ld bc, TAGGED_LIST : dec c` to get
 						; to TAG_COUNT in places
 REVERSE_INDEX_LOOKUP:
@@ -623,9 +657,8 @@ REVERSE_INDEX_LOOKUP:
 
 TAG_COUNT
 	DEFB 0
-TAGGED_LIST:
-	DEFB $ff				; note that this MUST be at the end as it can grow (not huge, but possible)
-	BLOCK 99, $ff
+TAGGED_LIST:					; TAGGED_LIST is accessed by NextBASIC to see what was actually tagged
+	BLOCK 100, $ff
 
 
 ; **************************************************************
@@ -1015,6 +1048,7 @@ PROGRAM_END:
 	DISPLAY "  #define M_FN_POPULATEGRID=",/D,NBPopulateGrid-Start,""
 	DISPLAY "  #define M_TAGINDEX=",/D,NBTagIndex-Start,""
 	DISPLAY "  #define M_FN_TAG=",/D,NBTag-Start,""
+	DISPLAY "  #define M_FN_MIXMAX=",/D,NBMinMax-Start,""
 
 	DISPLAY " "
         DISPLAY "Size:                 ",/D,PROGRAM_END-Start," bytes"
