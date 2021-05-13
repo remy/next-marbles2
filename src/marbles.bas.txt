@@ -53,6 +53,7 @@ ON ERROR GO TO 9200
 #define OFFSET_NEXT_LEVEL=11392
 #define OFFSET_GAME_OVER=0
 #define OFFSET_TITLE=2560
+#define OFFSET_CONTROLS_ALT=0
 
 ; entry points in the marbles.bin library for methods and method constants
 #define M_CANMOVE=432
@@ -89,7 +90,7 @@ ON ERROR GO TO 9200
 
 #define EMPTY=54
 
-%p(#DEVICE)=#NOT_SELECTED
+%p(#DEVICE)=#KEYBAORD
 %p(#SCORE)=0
 %p(#THEME)=%5*5: ; or 2*5
 RANDOMIZE
@@ -106,7 +107,7 @@ PROC loadAssets()
 ; PROC installInput()
 ; PROC testSelectAnimation()
 ; PROC testGameOver()
-; PROC splash()
+PROC splash()
 
 PROC gameLoop()
 
@@ -177,7 +178,10 @@ DEFPROC splash()
   %i=8
   BANK #BANKGFX_B LAYER %(#OFFSET_TITLE+(1408*(i-5))) TO 5,%i,22,1
 
-  PROC debugStop()
+;   PROC debugStop()
+  PROC onAnyKey()
+  BANK #BANK_ZEROS LAYER 512 TO 5,5,22,10
+  LAYER 1,1
 ENDPROC
 
 DEFPROC mainMenu()
@@ -580,6 +584,8 @@ DEFPROC gameOver()
   %j=0
   i$=""
 
+  BANK #BANKGFX_C LAYER #OFFSET_CONTROLS_ALT TO 21,13,11,8
+
   ; play a gameover sound
 ;   DRIVER #DRV_FX,2,0
 
@@ -902,6 +908,7 @@ DEFPROC loadAssets()
   LOAD "assets/next-level-small.nxi" BANK #BANKGFX_A,#OFFSET_NEXT_LEVEL,3840: ; 80w
   LOAD "assets/game-over.nxi" BANK #BANKGFX_B,#OFFSET_GAME_OVER,2560: ; 160w
   LOAD "assets/title.nxi" BANK #BANKGFX_B,#OFFSET_TITLE,12672: ; 176w
+  LOAD "assets/controls-alt.nxi" BANK #BANKGFX_C,#OFFSET_CONTROLS_ALT,5632: ; 88w
 
   ; marbles library
   LOAD "assets/marbles.bin" BANK #BANKLIB
