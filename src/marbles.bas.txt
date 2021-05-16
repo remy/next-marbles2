@@ -29,8 +29,12 @@ ON ERROR GO TO 9200
 #define BANK_LOCAL_SCORES=26
 #define BANK_UNDO=27
 #define BANKGFX_C=28
+#define BANK_FONTS=29
 
 #define DRV_FX=49
+
+#define FONT_COMPUTING_60=0
+#define FONT_COMPUTING_60=0
 
 # plot data structure
 # seed[2]
@@ -54,6 +58,12 @@ ON ERROR GO TO 9200
 #define OFFSET_GAME_OVER=0
 #define OFFSET_TITLE=2560
 #define OFFSET_CONTROLS_ALT=0
+#define OFFSET_ALERT=5632
+#define OFFSET_ALERT_T=5632
+#define OFFSET_ALERT_M=6528
+#define OFFSET_ALERT_B=7424
+#define OFFSET_ZEROS=512
+
 
 ; entry points in the marbles.bin library for methods and method constants
 #define M_CANMOVE=432
@@ -105,17 +115,31 @@ PROC loadAssets()
 
 ; testing screens
 ; PROC installInput()
-; PROC testSelectAnimation()
 ; PROC testGameOver()
+; PROC testMarlbesClear()
+; PROC testSelectAnimation()
 PROC splash()
 
 PROC gameLoop()
 
 PAUSE 0
 
+DEFPROC testMarlbesClear()
+  PROC startGame(%p(#SEED))
+  SPRITE PRINT 0
+  FOR %j=0 TO 99
+    PROC toXY(%j) TO %x,%y
+    TILE 1,1 AT 0,1 TO %x,%(y+1)
+  NEXT %j
+  TILE 10,10 AT 0,4 TO 0,1
+  PROC debugStop()
+ENDPROC
+
 DEFPROC testGameOver()
   PROC startGame(%p(#SEED))
   PROC gameOver()
+  IF i$="n" THEN PROC newGame()
+  PROC onAnyKey()
   PROC debugStop()
 ENDPROC
 
@@ -130,7 +154,7 @@ ENDPROC
 
 DEFPROC gameLoop()
   REPEAT
-;     PROC setGameBorder()
+    SPRITE PRINT 0
     PROC selectInput()
     %i=0
     PROC showHighScores() TO %i
@@ -142,6 +166,7 @@ DEFPROC gameLoop()
       IF i$="n" THEN PROC newGame()
       IF i$="u" THEN PROC undo()
     REPEAT UNTIL i$="e"
+    PROC setGameBorder()
   REPEAT UNTIL 0
 ENDPROC
 
@@ -178,13 +203,23 @@ DEFPROC splash()
   %i=8
   BANK #BANKGFX_B LAYER %(#OFFSET_TITLE+(1408*(i-5))) TO 5,%i,22,1
 
+  PROC font(1,4)
+  PRINT AT 15,15;"Plan ahead...or lose embarrassingly."
+  INK 50
+  PRINT AT 17,19;"A puzzle game by Remy Sharp"
+
 ;   PROC debugStop()
-  PROC onAnyKey()
-  BANK #BANK_ZEROS LAYER 512 TO 5,5,22,10
+  PAUSE 200
+  BANK #BANK_ZEROS LAYER #OFFSET_ZEROS TO 5,4,22,9
+  BANK #BANK_ZEROS LAYER #OFFSET_ZEROS TO 5,12,22,9
+
+;   TILE 1,10 AT 0,0 TO 2,2
+;   LAYER ERASE 2,2,100,100
   LAYER 1,1
 ENDPROC
 
 DEFPROC mainMenu()
+  PROC font(0,8)
   PROC printLayer()
   LOCAL %i
   LET start=0
@@ -344,6 +379,7 @@ ENDPROC =%i
 DEFPROC selectInput()
   CLS
 
+  PROC font(0,8)
   LAYER 1,1
 
   ; settings loop
@@ -462,7 +498,6 @@ DEFPROC selectBlock()
     %k=%j+1
     PROC toXY(%j) TO %x,%y
     %p=% SPRITE AT (k,2)
-;     SPRITE %k,,,#EMPTY,
     SPRITE %k,,,51,
     TILE 1,1 AT 0,%p-p(#THEME) TO %x,%(y+1)
     SPRITE CONTINUE %k, STOP , STOP ,51 TO 54, BIN 01100000,10,0
@@ -482,9 +517,9 @@ DEFPROC selectBlock()
   ; now disable the sprites that were animating
   SPRITE PAUSE %a TO %b
 
-;   LAYER ERASE 0,0,80,80,0: ; breaks in cspect
-  ; so instead we'll use the empty bytes in the palette bank and paint those
-  BANK #BANK_ZEROS LAYER 512 TO 0,0,10,10
+  ; LAYER ERASE 0,0,80,80,0: ; breaks in cspect
+  ; so instead we'll tile the "black" tile over the area (hidden by sprites)
+  TILE 10,10 AT 0,4 TO 0,1
 
   INK 50
   PROC pad2(%c) TO s$
@@ -577,12 +612,41 @@ DEFPROC undo()
   %p(#BUSY)=0
 ENDPROC
 
+; 24 characters per line
+DEFPROC alert(a$,b$)
+  LOCAL %i
+  BANK #BANKGFX_C LAYER #OFFSET_ALERT_T TO 7,9,14,1
+  BANK #BANKGFX_C LAYER #OFFSET_ALERT_M TO 7,10,14,1
+  BANK #BANKGFX_C LAYER #OFFSET_ALERT_M TO 7,11,14,1
+
+  BANK #BANKGFX_C LAYER #OFFSET_ALERT_M TO 7,12,14,1
+
+  %i=13
+
+  ; if there's something in b$
+  IF b$ <> "" THEN %i=14: BANK #BANKGFX_C LAYER #OFFSET_ALERT_M TO 7,13,14,1
+
+  BANK #BANKGFX_C LAYER #OFFSET_ALERT_B TO 7,%i,14,1
+
+  ; select small font
+  PROC font(1,4)
+  INK 252: PAPER 253
+  PRINT AT 11,16;a$
+  IF b$ <> "" THEN PRINT AT 12,16;b$
+
+  ; return font to normal
+  PROC font(0,8)
+ENDPROC
+
 DEFPROC gameOver()
   LOCAL %i
   LOCAL %j
   %i=0
   %j=0
   i$=""
+
+  ; disable the pointer
+  PROC pointerStatus(0)
 
   BANK #BANKGFX_C LAYER #OFFSET_CONTROLS_ALT TO 21,13,11,8
 
@@ -597,24 +661,46 @@ DEFPROC gameOver()
   SAVE "last.bnk" BANK #BANKPLOT,0,%p(#PLOTPTR)
   IF %p(#GOT_HIGH_SCORE) THEN PROC postHighScore()
 
-  %p(0)=%$1ff
-  %p(1)=%$124
-  %p(2)=%$1f8
-  %p(3)=%$145
-  BANK #BANKGFX_B LAYER #OFFSET_GAME_OVER TO 6,22,20,2
+  %p(0)=%$80
+  %p(1)=%$38
+  %p(2)=%$f8
+  %p(3)=%$87
+
+  REG 67,% BIN 10010000 : ; disable palette auto increment
+  REG 64,136: ; select index 136
+
+;   PROC alert("YOU KNOW YOU CAN UNDO","INSTEAD OF KEEP LOSING")
+;   PROC alert("    OH. YOU BLEW IT.","")
+;   PROC alert("MY ONE LEGGED CAT GOT","A BETTER SCORE THAN THAT")
+;   PROC alert("KEEP PRACTISING.","'COS YOU LOST...AGAIN...")
+  PROC alert("    NICE TRY MEATBAG    ","        TRY AGAIN")
+;   PROC alert("    I DIDNT KNOW THE","    SCORE WENT THAT LOW")
+  BANK #BANKGFX_B LAYER #OFFSET_GAME_OVER TO 5,22,20,2
   REPEAT
     ; this rotates the "game over" text as a layer draw - though it should be a
     ; palette rotation which would be hugely faster
-    IF %j&7=0 THEN :%i=%(i+1) MOD 4: LAYER PALETTE 0,136,%p(i)
+    IF %j&7=0 THEN %i=%(i+1) MOD 4: REG %68,%p(i): REG %68,%$81
     %j=%j+1
-    PROC readInput(): ; i$ is assigned in readInput
+    i$= INKEY$
   REPEAT UNTIL (i$="r") OR (i$="n") OR (i$="e")
+
+  REG 67,% BIN 00010000 : ; re-enable palette auto increment
+
+  ; re-enable the pointer for later
+;   PROC pointerStatus(1)
 
   %p(#BUSY)=0
 
   ; clear the section that showed game over
   BANK 11 ERASE 12288,4096,0
+  ; wipe this area of the screen using a layer print (layer erase doesn't work in cspect) - note that I can't (easily) use tile here because my tiles are 16px
+  ; and we need to tile over an odd (by 8px) width
+  BANK #BANK_ZEROS LAYER 512 TO 0,6,21,10
 
+ENDPROC
+
+DEFPROC pointerStatus(%i)
+  SPRITE #POINTER,,,,%i,
 ENDPROC
 
 DEFPROC postHighScore()
@@ -698,6 +784,7 @@ ENDPROC
 DEFPROC startGame(%s)
   CLS
   PROC gameLayer()
+  PROC font(0,8)
   SPRITE PRINT 0
   %p(#LEVEL)=1
   %p(#SCORE)=0
@@ -837,7 +924,7 @@ DEFPROC loadBlocks()
   IF %p(#LOAD_PATTERN)=6 THEN RESTORE :%p(#LOAD_PATTERN)=0
   %p(#LOAD_PATTERN)=%p(#LOAD_PATTERN)+1
 
-  ; configure the tiles
+  ; configure the tiles (note that tile 4 is actually blank)
   BANK #BANK_TILES POKE 0,%p(#THEME),%p(#THEME)+1,%p(#THEME)+2,%p(#THEME)+3
 
   ; this uses a predefined order to render the blocks in a circle which makes
@@ -852,6 +939,8 @@ DEFPROC loadBlocks()
     %a[j]=%r
     IF %n > 50 THEN PAUSE 1
   REPEAT UNTIL %n=0
+
+  PROC pointerStatus(1)
 ENDPROC
 
 DEFPROC toXY(%n)
@@ -886,6 +975,11 @@ DEFPROC pad2(%w)
   IF %w < 100 THEN ENDPROC =" "
 ENDPROC =""
 
+DEFPROC font(%i,width)
+  BANK #BANK_FONTS COPY %(i*768),768 TO 0,14848
+  PRINT CHR$ 30; CHR$ width;
+ENDPROC
+
 DEFPROC loadAssets()
   ; show the border right away
   BORDER 0: PAPER 0: CLS
@@ -899,7 +993,10 @@ DEFPROC loadAssets()
   PROC setGameBorder()
   SPRITE PALETTE 0 BANK #BANKPAL,0
 
-  LOAD "./assets/font.bin" CODE 64000
+  LOAD "./assets/font-computing-60s.bin" BANK #BANK_FONTS,0,768
+  LOAD "./assets/font-coal.bin" BANK #BANK_FONTS,768,768
+
+  PROC font(0,8)
   DPOKE 23606,63744: ; 64000-256 (256 = 8 * 32 control chars)
   PRINT CHR$ 2: ; trigger the font to also be loaded on layer 2
 
@@ -909,6 +1006,7 @@ DEFPROC loadAssets()
   LOAD "assets/game-over.nxi" BANK #BANKGFX_B,#OFFSET_GAME_OVER,2560: ; 160w
   LOAD "assets/title.nxi" BANK #BANKGFX_B,#OFFSET_TITLE,12672: ; 176w
   LOAD "assets/controls-alt.nxi" BANK #BANKGFX_C,#OFFSET_CONTROLS_ALT,5632: ; 88w
+  LOAD "assets/alert.nxi" BANK #BANKGFX_C,#OFFSET_ALERT,2688: ; 112w (3 rows of 8px)
 
   ; marbles library
   LOAD "assets/marbles.bin" BANK #BANKLIB
@@ -923,6 +1021,10 @@ DEFPROC loadAssets()
   BANK #BANKSPR COPY TO #BANK_TILE_SPR
   TILE BANK #BANK_TILE_SPR
   TILE DIM #BANK_TILES,0,1,16
+
+  ; set the default tile to the solid black at 54
+  BANK #BANK_TILES ERASE 54
+  BANK #BANK_TILES POKE 0,%p(#THEME),%p(#THEME)+1,%p(#THEME)+2,%p(#THEME)+3
   LAYER 1,1
 
   PROC installFX()
