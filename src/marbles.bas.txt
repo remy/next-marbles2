@@ -24,17 +24,15 @@ ON ERROR GO TO 9200
 #define BANKLIB=20
 #define BANKGFX_A=22
 #define BANKGFX_B=23
+#define BANKGFX_C=28
 #define BANK_FX=24
 #define BANK_REMOTE_SCORES=25
-#define BANK_LOCAL_SCORES=26
+#define BANK_LOCAL_SETTINGS=26
 #define BANK_UNDO=27
-#define BANKGFX_C=28
 #define BANK_FONTS=29
 
-#define DRV_FX=49
-
-#define FONT_COMPUTING_60=0
-#define FONT_COMPUTING_60=0
+# set debug bank to non zero to load predefined sequence
+#define BANKDEBUG=0
 
 # plot data structure
 # seed[2]
@@ -48,8 +46,10 @@ ON ERROR GO TO 9200
 # score[2]
 # [...]
 
-# set debug bank to non zero to load predefined sequence
-#define BANKDEBUG=0
+#define DRV_FX=49
+
+#define FONT_COMPUTING_60=0
+#define FONT_COAL=1
 
 ; bank graphic offsets
 #define OFFSET_CONTROLS=0
@@ -63,7 +63,6 @@ ON ERROR GO TO 9200
 #define OFFSET_ALERT_M=6528
 #define OFFSET_ALERT_B=7424
 #define OFFSET_ZEROS=512
-
 
 ; entry points in the marbles.bin library for methods and method constants
 #define M_CANMOVE=432
@@ -102,11 +101,20 @@ ON ERROR GO TO 9200
 
 %p(#DEVICE)=#KEYBAORD
 %p(#SCORE)=0
-%p(#THEME)=%5*5: ; or 2*5
+%p(#THEME)=%6*5: ; or 2*5
 RANDOMIZE
 %p(#SEED)=%1+ RND $ffff
 %p(#BEST)=0
 %p(#UNDO_PTR)=0
+
+; ==============================================
+; Stored user prefs
+; -----------------
+; - control method
+; - theme
+; - best (local) score
+; - best local seed
+; - local high scores? @ 1K
 
 h$="data.remysharp.com"
 
@@ -115,10 +123,10 @@ PROC loadAssets()
 
 ; testing screens
 ; PROC installInput()
+; PROC mainMenu()
 ; PROC testGameOver()
 ; PROC testMarlbesClear()
 ; PROC testSelectAnimation()
-PROC splash()
 
 PROC gameLoop()
 
@@ -151,13 +159,14 @@ DEFPROC testSelectAnimation()
   PROC debugStop()
 ENDPROC
 
-
 DEFPROC gameLoop()
+  PROC splash()
   REPEAT
     SPRITE PRINT 0
     PROC selectInput()
+;     PROC mainMenu()
     %i=0
-    PROC showHighScores() TO %i
+    PROC showHighScores() TO %i: ; decides whether a challenge is selected
     IF %i=0 THEN PROC replayGame(): ELSE : PROC startGame(%p(#SEED))
 
     REPEAT
@@ -209,7 +218,7 @@ DEFPROC splash()
   PRINT AT 17,19;"A puzzle game by Remy Sharp"
 
 ;   PROC debugStop()
-  PAUSE 200
+  PAUSE 220
   BANK #BANK_ZEROS LAYER #OFFSET_ZEROS TO 5,4,22,9
   BANK #BANK_ZEROS LAYER #OFFSET_ZEROS TO 5,12,22,9
 
@@ -229,8 +238,8 @@ DEFPROC mainMenu()
   REPEAT
     k$= INKEY$
     IF k$="1" THEN start=1
-    IF (k$ > "3") THEN : ELSE : PROC showHighScores() TO %i: IF %i THEN PROC setSeed(%p(#SEED)):start=1: ELSE PROC printMainMenuOptions()
     IF k$="4" THEN PROC selectInput()
+    IF (k$ > "3") THEN : ELSE : PROC showHighScores() TO %i: IF %i THEN PROC setSeed(%p(#SEED)):start=1: ELSE PROC printMainMenuOptions()
   REPEAT UNTIL start=1
 ENDPROC
 
@@ -981,17 +990,30 @@ DEFPROC font(%i,width)
 ENDPROC
 
 DEFPROC loadAssets()
-  ; show the border right away
+  ; I want to show the user some progress as soon as possible, so the first
+  ; thing I do is clear the screen (and border) to black.
   BORDER 0: PAPER 0: CLS
-  ; shadow L2 ends at 14, so we start at 15
+
+  ; Next comes the palette as I use custom colour set - once I've got _something_
+  ; more on the screen, th
   LAYER 2,1
-  BANK #BANKPAL ERASE
-  LOAD "assets/marbles.pal" BANK #BANKPAL
+  LOAD "assets/marbles.pal" BANK #BANKPAL,0,512
   LAYER PALETTE 0 BANK #BANKPAL,0
 
+  ; now configure the custom L1 palette where blink values are tweaked in a smart way
+  ; and most importantly the L1 transparency is configured at this point
   PROC configureL1Pal()
+
+  ; now - the first meaningful painting is done: the game border with the blocks
   PROC setGameBorder()
+
+  ; now we carry on with asset loading
   SPRITE PALETTE 0 BANK #BANKPAL,0
+
+  ; the bank_zero is used for clearing screen data - since LAYER ERASE doesn't
+  ; work in cspect. The bank, at time of writing, is also using the remaining
+  ; space in the palette bank
+  BANK #BANK_ZEROS ERASE #OFFSET_ZEROS,%($3fff-(#OFFSET_ZEROS))
 
   LOAD "./assets/font-computing-60s.bin" BANK #BANK_FONTS,0,768
   LOAD "./assets/font-coal.bin" BANK #BANK_FONTS,768,768
