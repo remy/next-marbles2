@@ -101,7 +101,7 @@ ON ERROR GO TO 9200
 
 %p(#DEVICE)=#KEYBAORD
 %p(#SCORE)=0
-%p(#THEME)=%6*5: ; or 2*5
+%p(#THEME)=%5*5: ; or 2*5
 RANDOMIZE
 %p(#SEED)=%1+ RND $ffff
 %p(#BEST)=0
@@ -123,7 +123,8 @@ PROC loadAssets()
 
 ; testing screens
 ; PROC installInput()
-; PROC mainMenu()
+; PROC splash()
+; PROC debugStop()
 ; PROC testGameOver()
 ; PROC testMarlbesClear()
 ; PROC testSelectAnimation()
@@ -160,21 +161,25 @@ DEFPROC testSelectAnimation()
 ENDPROC
 
 DEFPROC gameLoop()
-  PROC splash()
   REPEAT
     SPRITE PRINT 0
-    PROC selectInput()
+    PROC splash()
+;     PROC selectInput()
 ;     PROC mainMenu()
-    %i=0
-    PROC showHighScores() TO %i: ; decides whether a challenge is selected
-    IF %i=0 THEN PROC replayGame(): ELSE : PROC startGame(%p(#SEED))
+;     %i=0
+;     PROC showHighScores() TO %i: ; decides whether a challenge is selected
+;     IF %i=0 THEN PROC replayGame(): ELSE :
+    PROC startGame(%p(#SEED))
 
+    ; in-game UI control
     REPEAT
       PROC readInput()
       IF i$="r" THEN PROC replayGame()
       IF i$="n" THEN PROC newGame()
       IF i$="u" THEN PROC undo()
     REPEAT UNTIL i$="e"
+
+    ; exit the game - re-render our outer border
     PROC setGameBorder()
   REPEAT UNTIL 0
 ENDPROC
@@ -217,14 +222,11 @@ DEFPROC splash()
   INK 50
   PRINT AT 17,19;"A puzzle game by Remy Sharp"
 
-;   PROC debugStop()
   PAUSE 220
-  BANK #BANK_ZEROS LAYER #OFFSET_ZEROS TO 5,4,22,9
-  BANK #BANK_ZEROS LAYER #OFFSET_ZEROS TO 5,12,22,9
 
-;   TILE 1,10 AT 0,0 TO 2,2
-;   LAYER ERASE 2,2,100,100
-  LAYER 1,1
+  BANK #BANK_ZEROS LAYER #OFFSET_ZEROS TO 5,14,22,7
+
+  PROC mainMenu()
 ENDPROC
 
 DEFPROC mainMenu()
@@ -233,36 +235,44 @@ DEFPROC mainMenu()
   LOCAL %i
   LET start=0
   PROC printMainMenuOptions()
-  PROC onAnyKey()
+  PROC untilKeyUp()
   %i=0
   REPEAT
     k$= INKEY$
     IF k$="1" THEN start=1
+    IF k$="2" THEN PROC showHighScores()
     IF k$="4" THEN PROC selectInput()
-    IF (k$ > "3") THEN : ELSE : PROC showHighScores() TO %i: IF %i THEN PROC setSeed(%p(#SEED)):start=1: ELSE PROC printMainMenuOptions()
+;     IF (k$ > "3") THEN : ELSE : PROC showHighScores(): PROC setSeed(%p(#SEED)):start=1: ELSE PROC printMainMenuOptions()
   REPEAT UNTIL start=1
+
 ENDPROC
 
 
 DEFPROC printMainMenuOptions()
-  INK 1
-  PRINT AT 5,8;"Select your input"
+  LAYER 2,1
+  BANK #BANKGFX_B LAYER %#OFFSET_TITLE TO 5,5,22,9
+
   DIM j$(4,18)
   j$(1)="1. Free play"
   j$(2)="2. Challenge"
   j$(3)="3. Highscores"
   j$(4)="4. Settings"
 
-  CLS
-
   LAYER 1,1
-
-  FOR %i=1 TO 4
-    j=%i
-    PRINT AT %(i*2)+8,7;j$(j)
-  NEXT %i
+  INK 2
+  PRINT POINT 72,%(1*12)+105;"1. Free play"
+  PRINT POINT 72,%(2*12)+105;"2. Challenge"
+  PRINT POINT 72,%(3*12)+105;"3. Highscores"
+  PRINT POINT 72,%(4*12)+105;"4. Settings"
 
 ENDPROC
+
+DEFPROC clearL2Menu()
+  LAYER 2,1
+  BANK #BANK_ZEROS LAYER #OFFSET_ZEROS TO 5,4,22,9
+  BANK #BANK_ZEROS LAYER #OFFSET_ZEROS TO 5,12,22,9
+ENDPROC
+
 
 DEFPROC setGameBorder()
   PROC printLayer()
@@ -274,11 +284,12 @@ DEFPROC setGameBorder()
 ENDPROC
 
 DEFPROC showHighScores()
+  PROC clearL2Menu()
   b$= STR$ #BANK_REMOTE_SCORES
-  ON ERROR ENDPROC =0: ; fixme - do some kind of error handling
+  ON ERROR ON ENDPROC : ; fixme - do some kind of error handling
   ../assets/http get -h h$ -u /6 -b b$ -7
-  PROC renderHighScores() TO %i
-ENDPROC =%i
+  PROC renderHighScores()
+ENDPROC
 
 DEFPROC renderHighScores()
 
@@ -386,31 +397,31 @@ DEFPROC highlight(%c,%i)
 ENDPROC =%i
 
 DEFPROC selectInput()
-  CLS
-
-  PROC font(0,8)
+  PROC clearL2Menu()
   LAYER 1,1
+  CLS
+  PROC font(0,8)
 
   ; settings loop
   PROC printSettings()
-  LET start=0
+  LOCAL %i
+  %i=0
   REPEAT
     k$= INKEY$
     IF k$="1" THEN %p(#DEVICE)=#MOUSE: PROC printSettings()
     IF k$="2" THEN %p(#DEVICE)=#JOYSTICK: PROC printSettings()
     IF k$="3" THEN %p(#DEVICE)=#KEYBAORD: PROC printSettings()
 
-    IF k$="0" THEN start=1
-    IF % IN 31=16 THEN %p(#DEVICE)=#JOYSTICK:start=1
-  REPEAT UNTIL start=1
+    IF k$="0" THEN %i=1
+    IF % IN 31=16 THEN %p(#DEVICE)=#JOYSTICK:%i=1
+  REPEAT UNTIL %i=1
 
   SPRITE #POINTER,96,72,#POINTERSPR,1
 
-  IF %p(#DEVICE)=#MOUSE THEN PROC installMouse()
-  IF %p(#DEVICE) <> #MOUSE THEN PROC installInput()
+  CLS
+  PROC printMainMenuOptions()
+  PROC untilKeyUp()
 
-  IF %(#DEVICE)=#JOYSTICK THEN DRIVER 125,2,3
-  IF %(#DEVICE)=#KEYBAORD THEN DRIVER 125,2,5
 ENDPROC
 
 DEFPROC printSettings()
@@ -1053,6 +1064,11 @@ DEFPROC loadAssets()
   LOAD "assets/marbles.afb" BANK #BANK_FX
   DRIVER #DRV_FX,1,#BANK_FX
 
+  ; just install all the drivers and maybe it'll be fine!
+  PROC installMouse()
+  PROC installInput()
+  SPRITE #POINTER,96,72,#POINTERSPR,1
+
   POKE 23658,0: ; turn off CAPS LOCK (for menu items)
 ENDPROC
 
@@ -1109,15 +1125,17 @@ DEFPROC F1()
   PROC select()
 ENDPROC
 DEFPROC F2()
-  PROC select()
 ENDPROC
 DEFPROC F3()
-  PROC select()
 ENDPROC
 
 DEFPROC onAnyKey()
   REPEAT : REPEAT UNTIL INKEY$ =""
   REPEAT : REPEAT UNTIL INKEY$ <> "" OR ( IN 31=16)
+  REPEAT : REPEAT UNTIL INKEY$ =""
+ENDPROC
+
+DEFPROC untilKeyUp()
   REPEAT : REPEAT UNTIL INKEY$ =""
 ENDPROC
 
