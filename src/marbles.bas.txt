@@ -1,4 +1,4 @@
-#autoline 1
+#autoline 1,2
 #autostart 10
 #program marbles
 
@@ -123,6 +123,7 @@ PROC loadAssets()
 
 ; testing screens
 ; PROC installInput()
+; PROC testMenus()
 ; PROC splash()
 ; PROC debugStop()
 ; PROC testGameOver()
@@ -132,6 +133,18 @@ PROC loadAssets()
 PROC gameLoop()
 
 PAUSE 0
+
+DEFPROC testMenus()
+  PROC settingsMenu()
+  PROC debugStop()
+ENDPROC
+
+DEFPROC testNumbers()
+  PROC startGame(%p(#SEED))
+  %p(#SCORE)=62345
+  PROC nextLevel()
+  PROC debugStop()
+ENDPROC
 
 DEFPROC testMarlbesClear()
   PROC startGame(%p(#SEED))
@@ -241,7 +254,7 @@ DEFPROC mainMenu()
     k$= INKEY$
     IF k$="1" THEN start=1
     IF k$="2" THEN PROC showHighScores()
-    IF k$="4" THEN PROC selectInput()
+    IF k$="4" THEN PROC settingsMenu()
 ;     IF (k$ > "3") THEN : ELSE : PROC showHighScores(): PROC setSeed(%p(#SEED)):start=1: ELSE PROC printMainMenuOptions()
   REPEAT UNTIL start=1
 
@@ -424,6 +437,88 @@ DEFPROC selectInput()
 
 ENDPROC
 
+DEFPROC settingsMenu()
+;   PROC printLayer()
+  PROC clearL2Menu()
+  LAYER 2,1
+  PALETTE OVER 227
+
+  INK 255
+  PRINT AT 5,12;"Settings"
+
+  DIM j$(3,15)
+  j$(1)="Mouse"
+  j$(2)="Joystick"
+  j$(3)="Keyboard (QAOP)"
+
+  DIM t$(8,15)
+  t$(1)="Diamonds"
+  t$(2)="Original"
+  t$(3)="Numberwang"
+  t$(4)="Kitchen Floor"
+  t$(5)="Next Speccy"
+  t$(6)="New Grey"
+  t$(7)="Old Spec"
+  t$(8)="No Hope"
+
+  PRINT AT 9,5; INK 255;"I"; INK 50;"nput:"
+  BANK 10 DPOKE (4096+40),%$0f0f,%$0f0f,%$0f0f,%$000f: ; 8 pixels underline
+  PRINT AT 9,12;"Keyboard (QAOP)"
+  PRINT AT 12,5; INK 255;"T"; INK 50;"heme:"
+  BANK 10 DPOKE (10240+40),%$0f0f,%$0f0f,%$0f0f,%$000f: ; 8 pixels underline
+  PRINT AT 19,10; INK 255;"S"; INK 50;"ave Settings"
+  BANK 11 DPOKE ((8192)+80),%$0f00,%$0f0f,%$0f0f,%$000f: ; 8 pixels underline
+
+  PROC pointerStatus(0)
+  SPRITE PRINT 1
+  SPRITE PALETTE 0 BANK #BANKPAL,0
+  PROC printTheme()
+
+  LOCAL %i: LOCAL i
+  i=%p(#THEME)/5
+  PRINT AT 14,12; INK 52;t$(i+1)
+
+  PROC font(1,4)
+
+  PRINT AT 16,10; INK 50;"Want your own custom theme?"
+  PRINT AT 17,10; INK 50;"Add THEME.SPR to the game directory"
+
+  PROC font(0,8)
+
+  REPEAT
+    k$= INKEY$
+    IF k$="i" THEN %p(#DEVICE)=%((p(#DEVICE)+1) MOD 3):i=%p(#DEVICE): PRINT AT 9,12;j$(i+1)
+    IF k$="t" THEN %p(#THEME)=%(p(#THEME)+5) MOD 35:i=%p(#THEME)/5: PROC printTheme(): PRINT AT 14,12; INK 52;t$(i+1)
+
+    IF k$ <> "" THEN PROC untilKeyUp()
+  REPEAT UNTIL k$="s"
+
+  k$=""
+
+;   PROC debugStop()
+;   SPRITE PALETTE 0,227,454: ; return to normal transparency
+  PALETTE OVER 0
+  SPRITE PRINT 0
+  PROC disableTheme()
+  PROC clearL2Menu()
+  PROC printMainMenuOptions()
+
+ENDPROC
+
+DEFPROC printTheme()
+  SPRITE 101,%128,%124,%p(#THEME),1
+  SPRITE 102,%144,%124,%p(#THEME)+1,1
+  SPRITE 103,%160,%124,%p(#THEME)+2,1
+  SPRITE 104,%176,%124,%p(#THEME)+3,1
+ENDPROC
+
+DEFPROC disableTheme()
+  SPRITE 101,,,,0
+  SPRITE 102,,,,0
+  SPRITE 103,,,,0
+  SPRITE 104,,,,0
+ENDPROC
+
 DEFPROC printSettings()
   INK 1
   PRINT AT 5,8;"Select your input"
@@ -490,7 +585,7 @@ DEFPROC selectBlock()
 
   DRIVER #DRV_FX,2,1: ; play the "clack" sound
 
-  %p(#SCORE)=%p(#SCORE)+(c*(5+c))
+  %p(#SCORE)=%p(#SCORE)+(c*(1+c))
   %p(#LAST_CLEARED)=%c
   %p(#BLOCKSLEFT)=%p(#BLOCKSLEFT)-c
   BANK #BANKPLOT POKE %p(#PLOTPTR),%i: ; store the block cleared
@@ -706,16 +801,13 @@ DEFPROC gameOver()
 
   REG 67,% BIN 00010000 : ; re-enable palette auto increment
 
-  ; re-enable the pointer for later
-;   PROC pointerStatus(1)
-
   %p(#BUSY)=0
 
   ; clear the section that showed game over
   BANK 11 ERASE 12288,4096,0
   ; wipe this area of the screen using a layer print (layer erase doesn't work in cspect) - note that I can't (easily) use tile here because my tiles are 16px
   ; and we need to tile over an odd (by 8px) width
-  BANK #BANK_ZEROS LAYER 512 TO 0,6,21,10
+  BANK #BANK_ZEROS LAYER #OFFSET_ZEROS TO 0,6,21,10
 
 ENDPROC
 
@@ -802,6 +894,8 @@ DEFPROC nextLevel()
 ENDPROC
 
 DEFPROC startGame(%s)
+  LAYER 2,1
+  INK 255: PAPER 0
   CLS
   PROC gameLayer()
   PROC font(0,8)
@@ -889,6 +983,7 @@ DEFPROC newGame()
     PAUSE 36
   REPEAT UNTIL %c=13: ; return key
 
+  ; clear the area that had the seed entry box
   LAYER ERASE 24,72,120,48
 
   ; reset font sizes
@@ -920,19 +1015,19 @@ ENDPROC
 DEFPROC loadBlocks()
   %p(#BLOCKSLEFT)=100
 
-  INK 50
-
-  PRINT AT 3,21;"CLEARED   0"
-  PROC pad2(%p(#PLOTPTR)-2) TO s$
-  PRINT AT 4,21;"MOVES   ";s$;%(p(#PLOTPTR)-4)
-  PROC pad2(%p(#BLOCKSLEFT)) TO s$
-  PRINT AT 5,21;"REMAIN  ";s$;%p(#BLOCKSLEFT)
   INK 255
-  PROC pad4(%p(#SCORE)) TO s$
-  PRINT AT 2,21;"SCORE ";s$;%p(#SCORE)
+  PROC pad4(%p(#SCORE)) TO s$: PRINT AT 2,21;"SCORE ";s$;%p(#SCORE)
 
+  INK 50
+  PRINT AT 3,21;"CLEARED   0"
+  PROC pad2(%p(#PLOTPTR)-2) TO s$: PRINT AT 4,21;"MOVES   ";s$;%(p(#PLOTPTR)-4)
+  PROC pad2(%p(#BLOCKSLEFT)) TO s$: PRINT AT 5,21;"REMAIN  ";s$;%p(#BLOCKSLEFT)
+
+  INK 255
   PROC pad4(%p(#LEVEL)) TO s$
   PRINT AT 7,21;"LEVEL ";s$;%p(#LEVEL)
+
+  PROC printSeed()
 
   BANK #BANKGFX_A LAYER #OFFSET_CONTROLS TO 21,13,11,8
 
@@ -971,7 +1066,6 @@ ENDPROC =%x,%y
 DEFPROC setSeed(%s)
   BANK #BANKLIB DPOKE %#M_RANDOMSEED,%s
   %p(#SEED)=%s
-  PROC printSeed()
 ENDPROC
 
 DEFPROC printSeed()
@@ -1084,6 +1178,9 @@ DEFPROC configureL1Pal()
   LAYER PALETTE 0,17,0: ; paper @ 1
   LAYER PALETTE 0,18,146: ; paper @ 2 = dark grey
   LAYER PALETTE 0,19,146: ; paper @ 3 = dark grey
+
+  LAYER PALETTE 0,4,63: ; ink @ 4 = blue
+
   PALETTE OVER 0: ; L1 transparency @ 0 (black)
   PAPER 1: ; black background
 ENDPROC
