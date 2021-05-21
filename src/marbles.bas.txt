@@ -1,4 +1,4 @@
-#autoline 1,2
+#autoline 1,5
 #autostart 10
 #program marbles
 
@@ -191,6 +191,14 @@ DEFPROC gameLoop()
       IF i$="n" THEN PROC newGame()
       IF i$="u" THEN PROC undo()
     REPEAT UNTIL i$="e"
+
+    ; disable the block sprites
+    %n=100
+    SPRITE PRINT 0
+    REPEAT
+      SPRITE %n,,,,0
+      %n=%n-1
+    REPEAT UNTIL %n=0
 
     ; exit the game - re-render our outer border
     PROC setGameBorder()
@@ -470,6 +478,9 @@ DEFPROC settingsMenu()
   BANK 11 DPOKE ((8192)+80),%$0f00,%$0f0f,%$0f0f,%$000f: ; 8 pixels underline
 
   PROC pointerStatus(0)
+
+  ; turn off all sprites
+
   SPRITE PRINT 1
   SPRITE PALETTE 0 BANK #BANKPAL,0
   PROC printTheme()
@@ -484,6 +495,8 @@ DEFPROC settingsMenu()
   PRINT AT 17,10; INK 50;"Add THEME.SPR to the game directory"
 
   PROC font(0,8)
+
+  PROC onAnyKey()
 
   REPEAT
     k$= INKEY$
@@ -618,16 +631,13 @@ DEFPROC selectBlock()
     SPRITE CONTINUE %k, STOP , STOP ,51 TO 54, BIN 01100000,10,0
   NEXT %i
 
-;   PRINT AT 11,21;"DEBUG ";%a;"/";%b;"  "
-;   PROC onAnyKey()
-;   PRINT AT 11,21;"          "
-;   PRINT AT 12,21;"          "
-
   ; animate the frames and then disable the sprite animation when it's done
+  SPRITE STOP
   REPEAT
     SPRITE MOVE
     %i=% SPRITE AT (k,2)
   REPEAT UNTIL %i=54
+  SPRITE RUN
 
   ; now disable the sprites that were animating
   SPRITE PAUSE %a TO %b
