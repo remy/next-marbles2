@@ -1,5 +1,5 @@
 #autoline 1,5
-#autostart 10
+#autostart 1
 #program marbles
 
 ;-------------------------------------------------------------------------------
@@ -12,7 +12,8 @@
 ;-------------------------------------------------------------------------------
 
 RUN AT 3
-
+TESTING=1
+BORDER 0: PAPER 0: CLS
 ON ERROR GO TO 9200
 
 #define BANKPAL=15
@@ -92,9 +93,9 @@ ON ERROR GO TO 9200
 #define UNDO_PTR=12
 #define LAST_CLEARED=13
 
-#define MOUSE=1
-#define JOYSTICK=2
-#define KEYBAORD=3
+#define KEYBAORD=0
+#define JOYSTICK=1
+#define MOUSE=2
 #define NOT_SELECTED=4
 
 #define EMPTY=54
@@ -113,8 +114,8 @@ PROC reset()
 PROC loadAssets()
 
 ; testing screens
-PROC installInput()
-PROC testMenus()
+; PROC installInput()
+; PROC testMenus()
 ; PROC splash()
 ; PROC debugStop()
 ; PROC testGameOver()
@@ -128,6 +129,28 @@ PAUSE 0
 DEFPROC testMenus()
   PROC settingsMenu()
   PROC debugStop()
+ENDPROC
+
+DEFPROC testLoadBanks()
+  ; used in testing
+  LOAD "assets/marbles.pal" BANK #BANKPAL,0,512
+  LOAD "assets/font-computing-60s.bin" BANK #BANK_FONTS,0,768
+  LOAD "assets/font-coal.bin" BANK #BANK_FONTS,768,768
+  LOAD "assets/controls.nxi" BANK #BANKGFX_A,#OFFSET_CONTROLS,5632: ; 88w
+  LOAD "assets/new-game.nxi" BANK #BANKGFX_A,#OFFSET_NEW_GAME_BOX,5760: ; 120w
+  LOAD "assets/next-level-small.nxi" BANK #BANKGFX_A,#OFFSET_NEXT_LEVEL,3840: ; 80w
+  LOAD "assets/game-over.nxi" BANK #BANKGFX_B,#OFFSET_GAME_OVER,2560: ; 160w
+  LOAD "assets/title.nxi" BANK #BANKGFX_B,#OFFSET_TITLE,12672: ; 176w
+  LOAD "assets/controls-alt.nxi" BANK #BANKGFX_C,#OFFSET_CONTROLS_ALT,5632: ; 88w
+  LOAD "assets/alert.nxi" BANK #BANKGFX_C,#OFFSET_ALERT,2688: ; 112w (3 rows of 8px)
+
+  ; marbles library
+  LOAD "assets/marbles.bin" BANK #BANKLIB
+  LOAD "assets/marbles.spr" BANK #BANKSPR
+
+  ; audio
+  LOAD "assets/marbles.afb" BANK #BANK_FX
+
 ENDPROC
 
 DEFPROC testNumbers()
@@ -285,7 +308,8 @@ DEFPROC setGameBorder()
   CLS
   LAYER 2,1
   PAPER 254: INK 255
-  LOAD "assets/welcome.nxi" LAYER
+  IF TESTING THEN LOAD "assets/welcome.nxi" LAYER
+  IF TESTING=0 THEN :.extract MARBLES.BAS +87332 49152 -mb 9 : ; welcome
   LAYER 1,1
 ENDPROC
 
@@ -293,7 +317,7 @@ DEFPROC showHighScores()
   PROC clearL2Menu()
   b$= STR$ #BANK_REMOTE_SCORES
   ON ERROR ON ENDPROC : ; fixme - do some kind of error handling
-  ../assets/http get -h h$ -u /6 -b b$ -7
+  .http get -h h$ -u /6 -b b$ -7
   PROC renderHighScores()
 ENDPROC
 
@@ -436,9 +460,9 @@ DEFPROC settingsMenu()
   PRINT AT 5,12;"Settings"
 
   DIM j$(3,15)
-  j$(1)="Mouse"
+  j$(1)="Keyboard (QAOP)"
   j$(2)="Joystick"
-  j$(3)="Keyboard (QAOP)"
+  j$(3)="Mouse"
 
   DIM t$(8,15)
   t$(1)="Diamonds"
@@ -450,9 +474,12 @@ DEFPROC settingsMenu()
   t$(7)="Old Spec"
   t$(8)="No Hope"
 
+  LOCAL %i: LOCAL i
+  i=%p(#DEVICE)
+
   PRINT AT 9,5; INK 255;"I"; INK 50;"nput:"
   PROC underline(10,5)
-  PRINT AT 9,12;"Keyboard (QAOP)"
+  PRINT AT 9,12;j$(i+1)
   PRINT AT 12,5; INK 255;"T"; INK 50;"heme:"
   PROC underline(13,5)
   PRINT AT 19,10; INK 255;"S"; INK 50;"ave Settings"
@@ -466,7 +493,6 @@ DEFPROC settingsMenu()
   SPRITE PALETTE 0 BANK #BANKPAL,0
   PROC printTheme()
 
-  LOCAL %i: LOCAL i
   i=%p(#THEME)/5
   PRINT AT 14,12; INK 52;t$(i+1)
 
@@ -476,8 +502,6 @@ DEFPROC settingsMenu()
   PRINT AT 17,10; INK 50;"Add THEME.SPR to the game directory"
 
   PROC font(0,8)
-
-  PROC onAnyKey()
 
   REPEAT
     k$= INKEY$
@@ -596,9 +620,9 @@ DEFPROC selectBlock()
     %j=% BANK #BANKLIB PEEK (t+i)
     %k=%j+1
     PROC toXY(%j) TO %x,%y
-    %p=% SPRITE AT (k,2)
+    %m=% SPRITE AT (k,2)
     SPRITE %k,,,51,
-    TILE 1,1 AT 0,%p-p(#THEME) TO %x,%(y+1)
+    TILE 1,1 AT 0,%m-p(#THEME) TO %x,%(y+1)
     SPRITE CONTINUE %k, STOP , STOP ,51 TO 54, BIN 01100000,10,0
   NEXT %i
 
@@ -749,18 +773,18 @@ DEFPROC gameOver()
   ; play a gameover sound
 ;   DRIVER #DRV_FX,2,0
 
-  ; save their last game to disk
+  ; TODO save their last game to disk
   n$="REM"
   BANK #BANKPLOT POKE %p(#PLOTPTR),n$
   %p(#PLOTPTR)=%p(#PLOTPTR)+3
   %p(#BUSY)=1
-  SAVE "last.bnk" BANK #BANKPLOT,0,%p(#PLOTPTR)
+;   SAVE "last.bnk" BANK #BANKPLOT,0,%p(#PLOTPTR)
   IF %p(#GOT_HIGH_SCORE) THEN PROC saveHighScore(): PROC postHighScore()
 
-  %p(0)=%$80
-  %p(1)=%$38
-  %p(2)=%$f8
-  %p(3)=%$87
+  %a(0)=%$80
+  %a(1)=%$38
+  %a(2)=%$f8
+  %a(3)=%$87
 
   REG 67,% BIN 10010000 : ; disable palette auto increment
   REG 64,136: ; select index 136
@@ -775,7 +799,7 @@ DEFPROC gameOver()
   REPEAT
     ; this rotates the "game over" text as a layer draw - though it should be a
     ; palette rotation which would be hugely faster
-    IF %j&7=0 THEN %i=%(i+1) MOD 4: REG %68,%p(i): REG %68,%$81
+    IF %j&7=0 THEN %i=%(i+1) MOD 4: REG %68,%a(i): REG %68,%$81
     %j=%j+1
     i$= INKEY$
   REPEAT UNTIL (i$="r") OR (i$="n") OR (i$="e")
@@ -802,10 +826,10 @@ DEFPROC postHighScore()
   l$= STR$ l
   b$= STR$ #BANKPLOT
 
-;   ON ERROR ENDPROC
+  ON ERROR ENDPROC
 
   ; post to data.remysharp.com/6 - flash with white and base64 encode
-  ../assets/http post -b b$ -l l$ -h h$ -u /6 -v 7 -7
+  .http post -b b$ -l l$ -h h$ -u /6 -v 7 -7
 ENDPROC
 
 ; param {int} %i
@@ -1075,15 +1099,18 @@ DEFPROC font(%i,width)
   PRINT CHR$ 30; CHR$ width;
 ENDPROC
 
+DEFPROC extractAssets()
+  IF TESTING THEN PROC testLoadBanks(): ELSE : GO SUB 9900
+ENDPROC
+
 DEFPROC loadAssets()
+  PROC extractAssets()
   ; I want to show the user some progress as soon as possible, so the first
   ; thing I do is clear the screen (and border) to black.
   BORDER 0: PAPER 0: CLS
 
   ; Next comes the palette as I use custom colour set - once I've got _something_
-  ; more on the screen, th
   LAYER 2,1
-  LOAD "assets/marbles.pal" BANK #BANKPAL,0,512
   LAYER PALETTE 0 BANK #BANKPAL,0
 
   ; now configure the custom L1 palette where blink values are tweaked in a smart way
@@ -1101,27 +1128,12 @@ DEFPROC loadAssets()
   ; space in the palette bank
   BANK #BANK_ZEROS ERASE #OFFSET_ZEROS,%($3fff-(#OFFSET_ZEROS))
 
-  LOAD "assets/font-computing-60s.bin" BANK #BANK_FONTS,0,768
-  LOAD "assets/font-coal.bin" BANK #BANK_FONTS,768,768
-
   PROC font(0,8)
   DPOKE 23606,63744: ; 64000-256 (256 = 8 * 32 control chars)
   PRINT CHR$ 2: ; trigger the font to also be loaded on layer 2
 
-  LOAD "assets/controls.nxi" BANK #BANKGFX_A,#OFFSET_CONTROLS,5632: ; 88w
-  LOAD "assets/new-game.nxi" BANK #BANKGFX_A,#OFFSET_NEW_GAME_BOX,5760: ; 120w
-  LOAD "assets/next-level-small.nxi" BANK #BANKGFX_A,#OFFSET_NEXT_LEVEL,3840: ; 80w
-  LOAD "assets/game-over.nxi" BANK #BANKGFX_B,#OFFSET_GAME_OVER,2560: ; 160w
-  LOAD "assets/title.nxi" BANK #BANKGFX_B,#OFFSET_TITLE,12672: ; 176w
-  LOAD "assets/controls-alt.nxi" BANK #BANKGFX_C,#OFFSET_CONTROLS_ALT,5632: ; 88w
-  LOAD "assets/alert.nxi" BANK #BANKGFX_C,#OFFSET_ALERT,2688: ; 112w (3 rows of 8px)
-
-  ; marbles library
-  LOAD "assets/marbles.bin" BANK #BANKLIB
-
   BANK #BANK_UNDO ERASE %$AA
 
-  LOAD "assets/marbles.spr" BANK #BANKSPR
   SPRITE BANK #BANKSPR
   SPRITE BORDER 1
 
@@ -1136,7 +1148,6 @@ DEFPROC loadAssets()
   LAYER 1,1
 
   PROC installFX()
-  LOAD "assets/marbles.afb" BANK #BANK_FX
   DRIVER #DRV_FX,1,#BANK_FX
 
   ; just install all the drivers and maybe it'll be fine!
@@ -1272,16 +1283,16 @@ DATA %3,%6,%94,%95,%84,%85,%74,%75,%64,%65,%54,%55,%44,%45,%34,%35,%24,%25,%14,%
 9050 ENDPROC
 
 9060 DEFPROC installInput()
-9070 ON ERROR GO TO 9090
-9080 .uninstall assets/input.drv
-9090 .install assets/input.drv
+9070 ON ERROR GO TO 9100
+9080 REM .uninstall /nextzxos/input.drv
+9090 .install /nextzxos/input.drv
 9100 ON ERROR
 9110 ENDPROC
 
 9120 DEFPROC installFX()
-9130 ON ERROR GO TO 9150
-9140 .uninstall assets/ayfx.drv
-9150 .install assets/ayfx.drv
+9130 ON ERROR GO TO 9160
+9140 REM .uninstall /nextzxos/ayfx.drv
+9150 .install /nextzxos/ayfx.drv
 9160 ON ERROR
 9170 ENDPROC
 
@@ -1300,5 +1311,20 @@ DATA %3,%6,%94,%95,%84,%85,%74,%75,%64,%65,%54,%55,%44,%45,%34,%35,%24,%25,%14,%
 9300 PRINT "Error:";e$;", line:";lin;", statement:";st
 9310 REPEAT : REPEAT UNTIL INKEY$ =""
 9320 REPEAT : REPEAT UNTIL INKEY$ <> "" OR ( IN 31=16)
-9330 REPEAT : REPEAT UNTIL INKEY$ =""
+9330 REPEAT : REPEAT UNTIL INKEY$ ="": STOP
 
+9900 .extract MARBLES.BAS +28672 512 -mb 15 : ; pal
+9901 .extract MARBLES.BAS +29184 1536 -mb 29 : ; font
+9902 .extract MARBLES.BAS +30720 15232 -mb 22 : ; gfx A
+9903 .extract MARBLES.BAS +45952 15232 -mb 23 : ; gfx B
+9904 .extract MARBLES.BAS +61184 8320 -mb 28 : ; gfx C
+9905 .extract MARBLES.BAS +69504 1278 -mb 20 : ; lib
+9906 .extract MARBLES.BAS +70782 16384 -mb 16 : ; sprites
+9907 .extract MARBLES.BAS +87166 166 -mb 24 : ; fx
+9909 ON ERROR GO TO 9911
+9910 .extract MARBLES.BAS +136484 5968 -o /dot/http : ; .http
+9911 ON ERROR GO TO 9913
+9912 .extract MARBLES.BAS +142452 572 -o /nextzxos/ayfx.drv : ; ayfx.drv
+9913 ON ERROR GO TO 9915
+9914 .extract MARBLES.BAS +143024 578 -o /nextzxos/input.drv : ; input.drv
+9990 ON ERROR : RETURN
