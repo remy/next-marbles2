@@ -107,23 +107,14 @@ RANDOMIZE
 %p(#BEST)=0
 %p(#UNDO_PTR)=0
 
-; ==============================================
-; Stored user prefs
-; -----------------
-; - control method
-; - theme
-; - best (local) score
-; - best local seed
-; - local high scores? @ 1K
-
 h$="data.remysharp.com"
 
 PROC reset()
 PROC loadAssets()
 
 ; testing screens
-; PROC installInput()
-; PROC testMenus()
+PROC installInput()
+PROC testMenus()
 ; PROC splash()
 ; PROC debugStop()
 ; PROC testGameOver()
@@ -177,11 +168,6 @@ DEFPROC gameLoop()
   REPEAT
     SPRITE PRINT 0
     PROC splash()
-;     PROC selectInput()
-;     PROC mainMenu()
-;     %i=0
-;     PROC showHighScores() TO %i: ; decides whether a challenge is selected
-;     IF %i=0 THEN PROC replayGame(): ELSE :
     PROC startGame(%p(#SEED))
 
     ; in-game UI control
@@ -293,7 +279,6 @@ DEFPROC clearL2Menu()
   BANK #BANK_ZEROS LAYER #OFFSET_ZEROS TO 5,4,22,9
   BANK #BANK_ZEROS LAYER #OFFSET_ZEROS TO 5,12,22,9
 ENDPROC
-
 
 DEFPROC setGameBorder()
   PROC printLayer()
@@ -417,36 +402,32 @@ DEFPROC highlight(%c,%i)
   NEXT %k
 ENDPROC =%i
 
-DEFPROC selectInput()
-  PROC clearL2Menu()
-  LAYER 1,1
-  CLS
-  PROC font(0,8)
+DEFPROC saveHighScore()
+  BANK #BANK_LOCAL_SETTINGS DPOKE 2,%p(#SCORE)
+  BANK #BANK_LOCAL_SETTINGS DPOKE 4,%p(#SEED)
 
-  ; settings loop
-  PROC printSettings()
-  LOCAL %i
-  %i=0
-  REPEAT
-    k$= INKEY$
-    IF k$="1" THEN %p(#DEVICE)=#MOUSE: PROC printSettings()
-    IF k$="2" THEN %p(#DEVICE)=#JOYSTICK: PROC printSettings()
-    IF k$="3" THEN %p(#DEVICE)=#KEYBAORD: PROC printSettings()
+  ; TODO manage high score table
+  SAVE "marbles.dat" BANK #BANK_LOCAL_SETTINGS,0,46
+ENDPROC
 
-    IF k$="0" THEN %i=1
-    IF % IN 31=16 THEN %p(#DEVICE)=#JOYSTICK:%i=1
-  REPEAT UNTIL %i=1
+DEFPROC restoreSettings()
+  %p(#DEVICE)=% BANK #BANK_LOCAL_SETTINGS PEEK 0
+  %p(#THEME)=% BANK #BANK_LOCAL_SETTINGS PEEK 1
+  %p(#BEST)=% BANK #BANK_LOCAL_SETTINGS DPEEK 2
+ENDPROC
 
-  SPRITE #POINTER,96,72,#POINTERSPR,1
+DEFPROC underline(%y,%x)
+  LOCAL %b
 
-  CLS
-  PROC printMainMenuOptions()
-  PROC untilKeyUp()
+  ; set the bank and adjust the Y offset
+  IF %y < 8 THEN %b=9:%y=%y*2048: ELSE : IF %y < 16 THEN %b=10:%y=%(y-8)*2048: ELSE :%b=11:%y=%(y-16)*2048
 
+  %x=%x*8
+
+  BANK %b DPOKE %y+x,%$0f0f,%$0f0f,%$0f0f,%$000f: ; 8 pixels underline
 ENDPROC
 
 DEFPROC settingsMenu()
-;   PROC printLayer()
   PROC clearL2Menu()
   LAYER 2,1
   PALETTE OVER 227
@@ -470,12 +451,12 @@ DEFPROC settingsMenu()
   t$(8)="No Hope"
 
   PRINT AT 9,5; INK 255;"I"; INK 50;"nput:"
-  BANK 10 DPOKE (4096+40),%$0f0f,%$0f0f,%$0f0f,%$000f: ; 8 pixels underline
+  PROC underline(10,5)
   PRINT AT 9,12;"Keyboard (QAOP)"
   PRINT AT 12,5; INK 255;"T"; INK 50;"heme:"
-  BANK 10 DPOKE (10240+40),%$0f0f,%$0f0f,%$0f0f,%$000f: ; 8 pixels underline
+  PROC underline(13,5)
   PRINT AT 19,10; INK 255;"S"; INK 50;"ave Settings"
-  BANK 11 DPOKE ((8192)+80),%$0f00,%$0f0f,%$0f0f,%$000f: ; 8 pixels underline
+  PROC underline(20,10)
 
   PROC pointerStatus(0)
 
@@ -508,12 +489,17 @@ DEFPROC settingsMenu()
 
   k$=""
 
-;   PROC debugStop()
-;   SPRITE PALETTE 0,227,454: ; return to normal transparency
   PALETTE OVER 0
   SPRITE PRINT 0
+
   PROC disableTheme()
   PROC clearL2Menu()
+
+  ; save settings
+  BANK #BANK_LOCAL_SETTINGS POKE 0,%p(#DEVICE)
+  BANK #BANK_LOCAL_SETTINGS POKE 1,%p(#THEME)
+  SAVE "marbles.dat" BANK #BANK_LOCAL_SETTINGS,0,46
+
   PROC printMainMenuOptions()
 
 ENDPROC
@@ -532,22 +518,6 @@ DEFPROC disableTheme()
   SPRITE 104,,,,0
 ENDPROC
 
-DEFPROC printSettings()
-  INK 1
-  PRINT AT 5,8;"Select your input"
-  DIM j$(3,18)
-  j$(1)="1. Mouse"
-  j$(2)="2. Joystick"
-  j$(3)="3. Keyboard (QAOP)"
-
-  FOR %i=1 TO 3
-    j=%i
-    PRINT AT %(i*2)+8,7; INVERSE %i=p(#DEVICE);j$(j)
-  NEXT %i
-  INVERSE 0
-  PRINT AT %i+13,7;"0. START!"
-ENDPROC
-
 DEFPROC readInput()
   i$= INKEY$
   IF %p(#DEVICE)=#MOUSE THEN PROC readMouse(): ELSE PROC readJoystick()
@@ -560,6 +530,7 @@ DEFPROC readMouse()
 ENDPROC
 
 DEFPROC readJoystick()
+  ; note the REM below *must* be kept for the joystick driver to work
   DRIVER 125,4,1
   REM 12345678901234567890123456789012345678901234567890
 ENDPROC
@@ -784,7 +755,7 @@ DEFPROC gameOver()
   %p(#PLOTPTR)=%p(#PLOTPTR)+3
   %p(#BUSY)=1
   SAVE "last.bnk" BANK #BANKPLOT,0,%p(#PLOTPTR)
-  IF %p(#GOT_HIGH_SCORE) THEN PROC postHighScore()
+  IF %p(#GOT_HIGH_SCORE) THEN PROC saveHighScore(): PROC postHighScore()
 
   %p(0)=%$80
   %p(1)=%$38
@@ -1130,8 +1101,8 @@ DEFPROC loadAssets()
   ; space in the palette bank
   BANK #BANK_ZEROS ERASE #OFFSET_ZEROS,%($3fff-(#OFFSET_ZEROS))
 
-  LOAD "./assets/font-computing-60s.bin" BANK #BANK_FONTS,0,768
-  LOAD "./assets/font-coal.bin" BANK #BANK_FONTS,768,768
+  LOAD "assets/font-computing-60s.bin" BANK #BANK_FONTS,0,768
+  LOAD "assets/font-coal.bin" BANK #BANK_FONTS,768,768
 
   PROC font(0,8)
   DPOKE 23606,63744: ; 64000-256 (256 = 8 * 32 control chars)
@@ -1172,6 +1143,10 @@ DEFPROC loadAssets()
   PROC installMouse()
   PROC installInput()
   SPRITE #POINTER,96,72,#POINTERSPR,1
+
+  BANK #BANK_LOCAL_SETTINGS ERASE
+  LOAD "marbles.dat" BANK #BANK_LOCAL_SETTINGS
+  PROC restoreSettings()
 
   POKE 23658,0: ; turn off CAPS LOCK (for menu items)
 ENDPROC
