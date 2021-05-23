@@ -31,6 +31,7 @@ ON ERROR GO TO 9200
 #define BANK_LOCAL_SETTINGS=26
 #define BANK_UNDO=27
 #define BANK_FONTS=29
+#define BANK_CUSTOM_THEME=21
 
 # set debug bank to non zero to load predefined sequence
 #define BANKDEBUG=0
@@ -92,6 +93,7 @@ ON ERROR GO TO 9200
 #define GOT_HIGH_SCORE=11
 #define UNDO_PTR=12
 #define LAST_CLEARED=13
+#define CUSTOM_THEME=14
 
 #define KEYBAORD=0
 #define JOYSTICK=1
@@ -102,6 +104,7 @@ ON ERROR GO TO 9200
 
 %p(#DEVICE)=#KEYBAORD
 %p(#SCORE)=0
+%p(#CUSTOM_THEME)=0
 %p(#THEME)=%5*5: ; or 2*5
 RANDOMIZE
 %p(#SEED)=%1+ RND $ffff
@@ -464,7 +467,7 @@ DEFPROC settingsMenu()
   j$(2)="Joystick"
   j$(3)="Mouse"
 
-  DIM t$(8,15)
+  DIM t$(9,15)
   t$(1)="Diamonds"
   t$(2)="Original"
   t$(3)="Numberwang"
@@ -473,8 +476,9 @@ DEFPROC settingsMenu()
   t$(6)="New Grey"
   t$(7)="Old Spec"
   t$(8)="No Hope"
+  t$(9)="Custom"
 
-  LOCAL %i: LOCAL i
+  LOCAL %i: LOCAL i: LOCAL %j
   i=%p(#DEVICE)
 
   PRINT AT 9,5; INK 255;"I"; INK 50;"nput:"
@@ -503,10 +507,12 @@ DEFPROC settingsMenu()
 
   PROC font(0,8)
 
+  IF %p(#CUSTOM_THEME) THEN %j=45: ELSE :%j=40
+
   REPEAT
     k$= INKEY$
     IF k$="i" THEN %p(#DEVICE)=%((p(#DEVICE)+1) MOD 3):i=%p(#DEVICE): PRINT AT 9,12;j$(i+1)
-    IF k$="t" THEN %p(#THEME)=%(p(#THEME)+5) MOD 35:i=%p(#THEME)/5: PROC printTheme(): PRINT AT 14,12; INK 52;t$(i+1)
+    IF k$="t" THEN %p(#THEME)=%(p(#THEME)+5) MOD j:i=%p(#THEME)/5: PROC printTheme(): PRINT AT 14,12; INK 52;t$(i+1)
 
     IF k$ <> "" THEN PROC untilKeyUp()
   REPEAT UNTIL k$="s"
@@ -529,10 +535,13 @@ DEFPROC settingsMenu()
 ENDPROC
 
 DEFPROC printTheme()
+  ; note: this palette switch doesn't quite solve the issue when
+  IF %p(#THEME)=40 THEN SPRITE PALETTE 1: ELSE SPRITE PALETTE 0
   SPRITE 101,%128,%124,%p(#THEME),1
   SPRITE 102,%144,%124,%p(#THEME)+1,1
   SPRITE 103,%160,%124,%p(#THEME)+2,1
   SPRITE 104,%176,%124,%p(#THEME)+3,1
+  PRINT AT 15,12; INK 52;%p(#THEME)
 ENDPROC
 
 DEFPROC disableTheme()
@@ -1134,6 +1143,8 @@ DEFPROC loadAssets()
 
   BANK #BANK_UNDO ERASE %$AA
 
+  PROC loadCustomTheme()
+
   SPRITE BANK #BANKSPR
   SPRITE BORDER 1
 
@@ -1160,6 +1171,15 @@ DEFPROC loadAssets()
   PROC restoreSettings()
 
   POKE 23658,0: ; turn off CAPS LOCK (for menu items)
+ENDPROC
+
+DEFPROC loadCustomTheme()
+  ON ERROR ENDPROC
+
+  LOAD "theme.spr" BANK #BANK_CUSTOM_THEME,0,1024
+
+  BANK #BANK_CUSTOM_THEME COPY 0,1024 TO #BANKSPR,10240
+  %p(#CUSTOM_THEME)=1
 ENDPROC
 
 DEFPROC configureL1Pal()
@@ -1313,6 +1333,7 @@ DATA %3,%6,%94,%95,%84,%85,%74,%75,%64,%65,%54,%55,%44,%45,%34,%35,%24,%25,%14,%
 9320 REPEAT : REPEAT UNTIL INKEY$ <> "" OR ( IN 31=16)
 9330 REPEAT : REPEAT UNTIL INKEY$ ="": STOP
 
+# generated via makefile
 9900 .extract MARBLES.BAS +28672 512 -mb 15 : ; pal
 9901 .extract MARBLES.BAS +29184 1536 -mb 29 : ; font
 9902 .extract MARBLES.BAS +30720 15232 -mb 22 : ; gfx A
