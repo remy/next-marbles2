@@ -312,7 +312,8 @@ DEFPROC setGameBorder()
   LAYER 2,1
   PAPER 254: INK 255
   IF TESTING THEN LOAD "assets/welcome.nxi" LAYER
-  IF TESTING=0 THEN :.extract MARBLES.BAS +87332 49152 -mb 9 : ; welcome
+  IF TESTING=0 THEN :.extract MARBLES.BAS +86308 49152 -mb 9 : ; welcome
+
   LAYER 1,1
 ENDPROC
 
@@ -541,7 +542,6 @@ DEFPROC printTheme()
   SPRITE 102,%144,%124,%p(#THEME)+1,1
   SPRITE 103,%160,%124,%p(#THEME)+2,1
   SPRITE 104,%176,%124,%p(#THEME)+3,1
-  PRINT AT 15,12; INK 52;%p(#THEME)
 ENDPROC
 
 DEFPROC disableTheme()
@@ -790,10 +790,10 @@ DEFPROC gameOver()
 ;   SAVE "last.bnk" BANK #BANKPLOT,0,%p(#PLOTPTR)
   IF %p(#GOT_HIGH_SCORE) THEN PROC saveHighScore(): PROC postHighScore()
 
-  %a(0)=%$80
-  %a(1)=%$38
-  %a(2)=%$f8
-  %a(3)=%$87
+  %a(0)=%$cf: ; mint
+  %a(1)=%$38: ; green
+  %a(2)=%$87: ; dark purple
+  %a(3)=%$3f: ; cyan
 
   REG 67,% BIN 10010000 : ; disable palette auto increment
   REG 64,136: ; select index 136
@@ -808,7 +808,7 @@ DEFPROC gameOver()
   REPEAT
     ; this rotates the "game over" text as a layer draw - though it should be a
     ; palette rotation which would be hugely faster
-    IF %j&7=0 THEN %i=%(i+1) MOD 4: REG %68,%a(i): REG %68,%$81
+    IF %j&31=0 THEN %i=%(i+1) MOD 4: REG %68,%a(i): REG %68,%$81
     %j=%j+1
     i$= INKEY$
   REPEAT UNTIL (i$="r") OR (i$="n") OR (i$="e")
@@ -1334,18 +1334,18 @@ DATA %3,%6,%94,%95,%84,%85,%74,%75,%64,%65,%54,%55,%44,%45,%34,%35,%24,%25,%14,%
 9330 REPEAT : REPEAT UNTIL INKEY$ ="": STOP
 
 # generated via makefile
-9900 .extract MARBLES.BAS +28672 512 -mb 15 : ; pal
-9901 .extract MARBLES.BAS +29184 1536 -mb 29 : ; font
-9902 .extract MARBLES.BAS +30720 15232 -mb 22 : ; gfx A
-9903 .extract MARBLES.BAS +45952 15232 -mb 23 : ; gfx B
-9904 .extract MARBLES.BAS +61184 8320 -mb 28 : ; gfx C
-9905 .extract MARBLES.BAS +69504 1278 -mb 20 : ; lib
-9906 .extract MARBLES.BAS +70782 16384 -mb 16 : ; sprites
-9907 .extract MARBLES.BAS +87166 166 -mb 24 : ; fx
+9900 .extract MARBLES.BAS +27648 512 -mb 15 : ; pal
+9901 .extract MARBLES.BAS +28160 1536 -mb 29 : ; font
+9902 .extract MARBLES.BAS +29696 15232 -mb 22 : ; gfx A
+9903 .extract MARBLES.BAS +44928 15232 -mb 23 : ; gfx B
+9904 .extract MARBLES.BAS +60160 8320 -mb 28 : ; gfx C
+9905 .extract MARBLES.BAS +68480 1278 -mb 20 : ; lib
+9906 .extract MARBLES.BAS +69758 16384 -mb 16 : ; sprites
+9907 .extract MARBLES.BAS +86142 166 -mb 24 : ; fx
 9909 ON ERROR GO TO 9911
-9910 .extract MARBLES.BAS +136484 5968 -o /dot/http : ; .http
+9910 .extract MARBLES.BAS +135460 5968 -o /dot/http : ; .http
 9911 ON ERROR GO TO 9913
-9912 .extract MARBLES.BAS +142452 572 -o /nextzxos/ayfx.drv : ; ayfx.drv
+9912 .extract MARBLES.BAS +141428 572 -o /nextzxos/ayfx.drv : ; ayfx.drv
 9913 ON ERROR GO TO 9915
-9914 .extract MARBLES.BAS +143024 578 -o /nextzxos/input.drv : ; input.drv
+9914 .extract MARBLES.BAS +142000 578 -o /nextzxos/input.drv : ; input.drv
 9990 ON ERROR : RETURN

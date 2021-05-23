@@ -4,7 +4,8 @@ SIZE = stat -f %z
 SUM = awk '{s+=$$0} END {print s}'
 
 marbles.bas: src/marbles.bas.txt $(INCLUDE_FILES) Makefile
-	@cat src/marbles.bas.txt | sed 's/TESTING=1/TESTING=0/' | txt2bas -define -o marbles.bas
+	@cat src/marbles.bas.txt | sed 's/TESTING=1/TESTING=0/' | sed 's/^\s*;.*$$//g' | txt2bas -define -o marbles.bas
+
 	@truncate -s %256 marbles.bas
 	@echo "9900 .extract MARBLES.BAS +$$($(FILESIZE)) $$($(SIZE) src/assets/marbles.pal) -mb 15 : ; pal"
 	@cat src/assets/marbles.pal >> marbles.bas
@@ -27,7 +28,7 @@ marbles.bas: src/marbles.bas.txt $(INCLUDE_FILES) Makefile
 	@cat src/assets/marbles.spr >> marbles.bas
 	@echo "9907 .extract MARBLES.BAS +$$($(FILESIZE)) $$($(SIZE) src/assets/marbles.afb) -mb 24 : ; fx"
 	@cat src/assets/marbles.afb >> marbles.bas
-	@echo "9908 .extract MARBLES.BAS +$$($(FILESIZE)) $$($(SIZE) src/assets/welcome.nxi) -mb 9 : ; welcome"
+	@echo ".extract MARBLES.BAS +$$($(FILESIZE)) $$($(SIZE) src/assets/welcome.nxi) -mb 9 : ; welcome"
 	@cat src/assets/welcome.nxi >> marbles.bas
 
 	@echo "9909 ON ERROR GOTO 9911"
