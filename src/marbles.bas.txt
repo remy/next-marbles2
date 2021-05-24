@@ -8,6 +8,8 @@
 ; %p() - player state
 ; i$   - input key
 ; s$   - temp printed string
+; %a[] - collection of blocks
+; %c() - palette rotation colours
 ;
 ;-------------------------------------------------------------------------------
 
@@ -94,6 +96,7 @@ ON ERROR GO TO 9200
 #define UNDO_PTR=12
 #define LAST_CLEARED=13
 #define CUSTOM_THEME=14
+#define SOUND=15
 
 #define KEYBAORD=0
 #define JOYSTICK=1
@@ -110,6 +113,14 @@ RANDOMIZE
 %p(#SEED)=%1+ RND $ffff
 %p(#BEST)=0
 %p(#UNDO_PTR)=0
+%p(#SOUND)=1
+
+; palette rotation
+%c(0)=%$cf: ; mint
+%c(1)=%$38: ; green
+%c(2)=%$87: ; dark purple
+%c(3)=%$3f: ; cyan
+
 
 h$="data.remysharp.com"
 
@@ -312,7 +323,7 @@ DEFPROC setGameBorder()
   LAYER 2,1
   PAPER 254: INK 255
   IF TESTING THEN LOAD "assets/welcome.nxi" LAYER
-  IF TESTING=0 THEN :.extract MARBLES.BAS +86308 49152 -mb 9 : ; welcome
+  IF TESTING=0 THEN :.extract MARBLES.BAS +87937 49152 -mb 9 : ; welcome
 
   LAYER 1,1
 ENDPROC
@@ -431,8 +442,8 @@ DEFPROC highlight(%c,%i)
 ENDPROC =%i
 
 DEFPROC saveHighScore()
-  BANK #BANK_LOCAL_SETTINGS DPOKE 2,%p(#SCORE)
-  BANK #BANK_LOCAL_SETTINGS DPOKE 4,%p(#SEED)
+  BANK #BANK_LOCAL_SETTINGS DPOKE 10,%p(#SCORE)
+  BANK #BANK_LOCAL_SETTINGS DPOKE 12,%p(#SEED)
 
   ; TODO manage high score table
   SAVE "marbles.dat" BANK #BANK_LOCAL_SETTINGS,0,46
@@ -441,7 +452,9 @@ ENDPROC
 DEFPROC restoreSettings()
   %p(#DEVICE)=% BANK #BANK_LOCAL_SETTINGS PEEK 0
   %p(#THEME)=% BANK #BANK_LOCAL_SETTINGS PEEK 1
-  %p(#BEST)=% BANK #BANK_LOCAL_SETTINGS DPEEK 2
+  %p(#SOUND)=% BANK #BANK_LOCAL_SETTINGS PEEK 2
+  ; added space for reserved values
+  %p(#BEST)=% BANK #BANK_LOCAL_SETTINGS DPEEK 10
 ENDPROC
 
 DEFPROC underline(%y,%x)
@@ -463,6 +476,8 @@ DEFPROC settingsMenu()
   INK 255
   PRINT AT 5,12;"Settings"
 
+  LOCAL %i: LOCAL i: LOCAL %j
+
   DIM j$(3,15)
   j$(1)="Keyboard (QAOP)"
   j$(2)="Joystick"
@@ -479,15 +494,21 @@ DEFPROC settingsMenu()
   t$(8)="No Hope"
   t$(9)="Custom"
 
-  LOCAL %i: LOCAL i: LOCAL %j
-  i=%p(#DEVICE)
+  DIM d$(2,3)
+  d$(1)="Off": ; 0(+1) = off
+  d$(2)="On"
 
+  PRINT AT 7,5; INK 255;"S"; INK 50;"ound:"
+  PROC underline(8,5)
+  i=%p(#SOUND)
+  PRINT AT 7,12;d$(i+1)
   PRINT AT 9,5; INK 255;"I"; INK 50;"nput:"
   PROC underline(10,5)
+  i=%p(#DEVICE)
   PRINT AT 9,12;j$(i+1)
-  PRINT AT 12,5; INK 255;"T"; INK 50;"heme:"
-  PROC underline(13,5)
-  PRINT AT 19,10; INK 255;"S"; INK 50;"ave Settings"
+  PRINT AT 11,5; INK 255;"T"; INK 50;"heme:"
+  PROC underline(12,5)
+  PRINT AT 19,10; INK 255;"B"; INK 50;"ack & save"
   PROC underline(20,10)
 
   PROC pointerStatus(0)
@@ -499,12 +520,12 @@ DEFPROC settingsMenu()
   PROC printTheme()
 
   i=%p(#THEME)/5
-  PRINT AT 14,12; INK 52;t$(i+1)
+  PRINT POINT 96,103; INK 52;t$(i+1)
 
   PROC font(1,4)
 
-  PRINT AT 16,10; INK 50;"Want your own custom theme?"
-  PRINT AT 17,10; INK 50;"Add THEME.SPR to the game directory"
+  PRINT POINT 40,116; INK 50;"Want your own custom theme?"
+  PRINT POINT 40,124; INK 50;"Add THEME.SPR to the game directory"
 
   PROC font(0,8)
 
@@ -513,10 +534,11 @@ DEFPROC settingsMenu()
   REPEAT
     k$= INKEY$
     IF k$="i" THEN %p(#DEVICE)=%((p(#DEVICE)+1) MOD 3):i=%p(#DEVICE): PRINT AT 9,12;j$(i+1)
-    IF k$="t" THEN %p(#THEME)=%(p(#THEME)+5) MOD j:i=%p(#THEME)/5: PROC printTheme(): PRINT AT 14,12; INK 52;t$(i+1)
+    IF k$="t" THEN %p(#THEME)=%(p(#THEME)+5) MOD j:i=%p(#THEME)/5: PROC printTheme(): PRINT POINT 96,103; INK 52;t$(i+1)
+    IF k$="s" THEN %p(#SOUND)=%(p(#SOUND)+1) MOD 2:i=%p(#SOUND): PRINT AT 7,12;d$(i+1)
 
     IF k$ <> "" THEN PROC untilKeyUp()
-  REPEAT UNTIL k$="s"
+  REPEAT UNTIL k$="b"
 
   k$=""
 
@@ -529,6 +551,7 @@ DEFPROC settingsMenu()
   ; save settings
   BANK #BANK_LOCAL_SETTINGS POKE 0,%p(#DEVICE)
   BANK #BANK_LOCAL_SETTINGS POKE 1,%p(#THEME)
+  BANK #BANK_LOCAL_SETTINGS POKE 2,%p(#SOUND)
   SAVE "marbles.dat" BANK #BANK_LOCAL_SETTINGS,0,46
 
   PROC printMainMenuOptions()
@@ -538,10 +561,10 @@ ENDPROC
 DEFPROC printTheme()
   ; note: this palette switch doesn't quite solve the issue when
   IF %p(#THEME)=40 THEN SPRITE PALETTE 1: ELSE SPRITE PALETTE 0
-  SPRITE 101,%128,%124,%p(#THEME),1
-  SPRITE 102,%144,%124,%p(#THEME)+1,1
-  SPRITE 103,%160,%124,%p(#THEME)+2,1
-  SPRITE 104,%176,%124,%p(#THEME)+3,1
+  SPRITE 101,%128,%117,%p(#THEME),1
+  SPRITE 102,%144,%117,%p(#THEME)+1,1
+  SPRITE 103,%160,%117,%p(#THEME)+2,1
+  SPRITE 104,%176,%117,%p(#THEME)+3,1
 ENDPROC
 
 DEFPROC disableTheme()
@@ -600,7 +623,8 @@ DEFPROC selectBlock()
 
   IF %c < 2 THEN %p(#BUSY)=0: ENDPROC
 
-  DRIVER #DRV_FX,2,1: ; play the "clack" sound
+  ; play the "clack" sound
+  PROC effect(0)
 
   %p(#SCORE)=%p(#SCORE)+(c*(1+c))
   %p(#LAST_CLEARED)=%c
@@ -675,6 +699,11 @@ DEFPROC selectBlock()
   IF %( BANK #BANKLIB PEEK #M_CANMOVE)=0 THEN %p(#BUSY)=1: PAUSE 10: PROC gameOver()
   IF %p(#BLOCKSLEFT)=0 THEN PROC nextLevel()
 
+ENDPROC
+
+DEFPROC effect(%i)
+  IF %p(#SOUND)=0 THEN ENDPROC
+  DRIVER #DRV_FX,2,%i
 ENDPROC
 
 DEFPROC debugStop()
@@ -779,36 +808,26 @@ DEFPROC gameOver()
 
   BANK #BANKGFX_C LAYER #OFFSET_CONTROLS_ALT TO 21,13,11,8
 
-  ; play a gameover sound
-;   DRIVER #DRV_FX,2,0
-
-  ; TODO save their last game to disk
   n$="REM"
   BANK #BANKPLOT POKE %p(#PLOTPTR),n$
   %p(#PLOTPTR)=%p(#PLOTPTR)+3
   %p(#BUSY)=1
-;   SAVE "last.bnk" BANK #BANKPLOT,0,%p(#PLOTPTR)
-  IF %p(#GOT_HIGH_SCORE) THEN PROC saveHighScore(): PROC postHighScore()
 
-  %a(0)=%$cf: ; mint
-  %a(1)=%$38: ; green
-  %a(2)=%$87: ; dark purple
-  %a(3)=%$3f: ; cyan
+  ; play a gameover sound depending on their highscore
+  IF %p(#GOT_HIGH_SCORE) THEN PROC effect(3): PROC saveHighScore(): PROC postHighScore()
+  IF %p(#GOT_HIGH_SCORE)=0 THEN PROC effect(2)
 
-  REG 67,% BIN 10010000 : ; disable palette auto increment
-  REG 64,136: ; select index 136
+  PROC loserMessage() TO a$,b$
+  PROC alert(a$,b$)
 
-;   PROC alert("YOU KNOW YOU CAN UNDO","INSTEAD OF KEEP LOSING")
-;   PROC alert("    OH. YOU BLEW IT.","")
-;   PROC alert("MY ONE LEGGED CAT GOT","A BETTER SCORE THAN THAT")
-;   PROC alert("KEEP PRACTISING.","'COS YOU LOST...AGAIN...")
-  PROC alert("    NICE TRY MEATBAG    ","        TRY AGAIN")
-;   PROC alert("    I DIDNT KNOW THE","    SCORE WENT THAT LOW")
   BANK #BANKGFX_B LAYER #OFFSET_GAME_OVER TO 5,22,20,2
+
+  ; rotate the palette and wait for key input
+  REG 67,% BIN 10010000 : ; disable palette auto increment
   REPEAT
     ; this rotates the "game over" text as a layer draw - though it should be a
     ; palette rotation which would be hugely faster
-    IF %j&31=0 THEN %i=%(i+1) MOD 4: REG %68,%a(i): REG %68,%$81
+    IF %j&31=0 THEN %i=%(i+1) MOD 4: PROC rotatePal(%i)
     %j=%j+1
     i$= INKEY$
   REPEAT UNTIL (i$="r") OR (i$="n") OR (i$="e")
@@ -819,10 +838,23 @@ DEFPROC gameOver()
 
   ; clear the section that showed game over
   BANK 11 ERASE 12288,4096,0
-  ; wipe this area of the screen using a layer print (layer erase doesn't work in cspect) - note that I can't (easily) use tile here because my tiles are 16px
-  ; and we need to tile over an odd (by 8px) width
+  ; wipe this area of the screen using a layer print (layer erase doesn't work in cspect)
+  ; note that I can't (easily) use tile here because my tiles are 16px and we need to
+  ; tile over an odd (by 8px) width
   BANK #BANK_ZEROS LAYER #OFFSET_ZEROS TO 0,6,21,10
 
+ENDPROC
+
+DEFPROC rotatePal(%i)
+  ; select index 136 and the next 4 and rotate their colours and set priority
+  REG 64,136
+  REG %68,%c(i MOD 4): REG %68,%$81
+  REG 64,137
+  REG %68,%c((i+1) MOD 4): REG %68,%$81
+  REG 64,138
+  REG %68,%c((i+2) MOD 4): REG %68,%$81
+  REG 64,139
+  REG %68,%c((i+3) MOD 4): REG %68,%$81
 ENDPROC
 
 DEFPROC pointerStatus(%i)
@@ -887,6 +919,8 @@ ENDPROC =%r
 DEFPROC nextLevel()
   %p(#LEVEL)=%p(#LEVEL)+1
   %p(#UNDO_PTR)=0: ; reset the undo
+
+  PROC effect(4)
 
   ; show Next Level box
   BANK #BANKGFX_A LAYER #OFFSET_NEXT_LEVEL TO 5,9,10,6
@@ -1065,7 +1099,7 @@ DEFPROC loadBlocks()
     %r=% BANK #BANKLIB PEEK j
     PROC toXY(%j) TO %x,%y
     SPRITE %j+1,%(x*16)+32,%(y*16)+48,%r+p(#THEME),1
-    %a[j]=%r
+;     %a[j]=%r
     IF %n > 50 THEN PAUSE 1
   REPEAT UNTIL %n=0
 
@@ -1167,7 +1201,7 @@ DEFPROC loadAssets()
   SPRITE #POINTER,96,72,#POINTERSPR,1
 
   BANK #BANK_LOCAL_SETTINGS ERASE
-  LOAD "marbles.dat" BANK #BANK_LOCAL_SETTINGS
+  PROC openSettings()
   PROC restoreSettings()
 
   POKE 23658,0: ; turn off CAPS LOCK (for menu items)
@@ -1316,7 +1350,6 @@ DATA %3,%6,%94,%95,%84,%85,%74,%75,%64,%65,%54,%55,%44,%45,%34,%35,%24,%25,%14,%
 9160 ON ERROR
 9170 ENDPROC
 
-
 # error handling needs to be outside a proc
 9200 ERROR TO err,lin,st
 9210 e$= STR$ err
@@ -1333,19 +1366,33 @@ DATA %3,%6,%94,%95,%84,%85,%74,%75,%64,%65,%54,%55,%44,%45,%34,%35,%24,%25,%14,%
 9320 REPEAT : REPEAT UNTIL INKEY$ <> "" OR ( IN 31=16)
 9330 REPEAT : REPEAT UNTIL INKEY$ ="": STOP
 
+9340 DEFPROC openSettings()
+9350 ON ERROR GO TO 9370
+9360 LOAD "marbles.dat" BANK #BANK_LOCAL_SETTINGS
+9370 ON ERROR : ENDPROC
+
+9400 DEFPROC loserMessage()
+9401 LOCAL %i: RANDOMIZE :%i=%( RND 5)+9402: GO TO %i
+9402 ENDPROC ="   YOU KNOW YOU CAN UNDO","  INSTEAD OF KEEP LOSING"
+9403 ENDPROC ="    OH. YOU BLEW IT.",""
+9404 ENDPROC ="  MY ONE LEGGED CAT GOT","A BETTER SCORE THAN THAT"
+9405 ENDPROC ="KEEP PRACTISING.","'COS YOU LOST...AGAIN..."
+9406 ENDPROC ="    NICE TRY MEATBAG    ","        TRY AGAIN"
+9407 ENDPROC ="    I DIDNT KNOW THE","    SCORE WENT THAT LOW"
+
 # generated via makefile
-9900 .extract MARBLES.BAS +27648 512 -mb 15 : ; pal
-9901 .extract MARBLES.BAS +28160 1536 -mb 29 : ; font
-9902 .extract MARBLES.BAS +29696 15232 -mb 22 : ; gfx A
-9903 .extract MARBLES.BAS +44928 15232 -mb 23 : ; gfx B
-9904 .extract MARBLES.BAS +60160 8320 -mb 28 : ; gfx C
-9905 .extract MARBLES.BAS +68480 1278 -mb 20 : ; lib
-9906 .extract MARBLES.BAS +69758 16384 -mb 16 : ; sprites
-9907 .extract MARBLES.BAS +86142 166 -mb 24 : ; fx
+9900 .extract MARBLES.BAS +28928 512 -mb 15 : ; pal
+9901 .extract MARBLES.BAS +29440 1536 -mb 29 : ; font
+9902 .extract MARBLES.BAS +30976 15232 -mb 22 : ; gfx A
+9903 .extract MARBLES.BAS +46208 15232 -mb 23 : ; gfx B
+9904 .extract MARBLES.BAS +61440 8320 -mb 28 : ; gfx C
+9905 .extract MARBLES.BAS +69760 1278 -mb 20 : ; lib
+9906 .extract MARBLES.BAS +71038 16384 -mb 16 : ; sprites
+9907 .extract MARBLES.BAS +87422 515 -mb 24 : ; fx
 9909 ON ERROR GO TO 9911
-9910 .extract MARBLES.BAS +135460 5968 -o /dot/http : ; .http
+9910 .extract MARBLES.BAS +137089 5968 -o /dot/http : ; .http
 9911 ON ERROR GO TO 9913
-9912 .extract MARBLES.BAS +141428 572 -o /nextzxos/ayfx.drv : ; ayfx.drv
+9912 .extract MARBLES.BAS +143057 572 -o /nextzxos/ayfx.drv : ; ayfx.drv
 9913 ON ERROR GO TO 9915
-9914 .extract MARBLES.BAS +142000 578 -o /nextzxos/input.drv : ; input.drv
+9914 .extract MARBLES.BAS +143629 578 -o /nextzxos/input.drv : ; input.drv
 9990 ON ERROR : RETURN
