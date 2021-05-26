@@ -14,9 +14,12 @@
 ;-------------------------------------------------------------------------------
 
 RUN AT 3
+
 TESTING=1
 BORDER 0: PAPER 0: CLS
 ON ERROR GO TO 9200
+
+RESTORE
 
 #define BANKPAL=15
 #define BANK_ZEROS=15
@@ -129,6 +132,8 @@ PROC loadAssets()
 
 ; testing screens
 ; PROC installInput()
+; PROC showHighScores()
+; PROC debugStop()
 ; PROC testMenus()
 ; PROC splash()
 ; PROC debugStop()
@@ -323,7 +328,7 @@ DEFPROC setGameBorder()
   LAYER 2,1
   PAPER 254: INK 255
   IF TESTING THEN LOAD "assets/welcome.nxi" LAYER
-  IF TESTING=0 THEN :.extract MARBLES.BAS +87937 49152 -mb 9 : ; welcome
+  IF TESTING=0 THEN :.extract MARBLES.BAS +88193 49152 -mb 9 : ; welcome
 
   LAYER 1,1
 ENDPROC
@@ -331,9 +336,11 @@ ENDPROC
 DEFPROC showHighScores()
   PROC clearL2Menu()
   b$= STR$ #BANK_REMOTE_SCORES
-  ON ERROR ON ENDPROC : ; fixme - do some kind of error handling
-  .http get -h h$ -u /6 -b b$ -7
-  PROC renderHighScores()
+  ON ERROR ENDPROC : ; fixme - do some kind of error handling
+  PROC getHighScores() TO %i
+  IF %i THEN PROC renderHighScores():start=1
+  IF %i=0 THEN PRINT "it failed"
+
 ENDPROC
 
 DEFPROC renderHighScores()
@@ -377,15 +384,17 @@ DEFPROC renderHighScores()
 
   REPEAT UNTIL %i=0
 
-  PRINT AT 19,7;"Challenge? "; FLASH 1;"Y"; FLASH 0;"es/No"
-  PRINT AT 21,18;"▀"
+  LAYER 2,1
+
+  PRINT AT 19,7; INK 50;"Challenge? "; INK 255;"Y"; INK 50;"es/No"
+  PROC underline(20,18)
 
   REPEAT
     k$= INKEY$
   REPEAT UNTIL k$="y" OR k$="n" OR ( CODE k$)=13
   REPEAT : REPEAT UNTIL INKEY$ =""
 
-  IF k$="n" THEN PRINT AT 20,18;"   ▀": ENDPROC =0
+  IF k$="n" THEN PRINT AT 20,18;" ": PROC underline(20,22): PRINT AT 19,18; INK 50;"Yes/"; INK 255;"N"; INK 50;"o": ENDPROC
 
   ; wait loop
   PRINT AT 19,4;"Use cursors keys & enter"
@@ -405,7 +414,7 @@ DEFPROC renderHighScores()
   REPEAT UNTIL %c=13
 
   %p(#SEED)=% BANK #BANK_REMOTE_SCORES DPEEK ((i*7)+3): ; seed
-ENDPROC =1
+ENDPROC
 
 DEFPROC gameLayer()
   LAYER OVER 0
@@ -1272,8 +1281,10 @@ DEFPROC F1()
   PROC select()
 ENDPROC
 DEFPROC F2()
+; nothing
 ENDPROC
 DEFPROC F3()
+; nothing
 ENDPROC
 
 DEFPROC onAnyKey()
@@ -1367,13 +1378,19 @@ DATA %3,%6,%94,%95,%84,%85,%74,%75,%64,%65,%54,%55,%44,%45,%34,%35,%24,%25,%14,%
 9330 REPEAT : REPEAT UNTIL INKEY$ ="": STOP
 
 9340 DEFPROC openSettings()
-9350 ON ERROR GO TO 9370
-9360 LOAD "marbles.dat" BANK #BANK_LOCAL_SETTINGS
-9370 ON ERROR : ENDPROC
+9341 ON ERROR GO TO 9343
+9342 LOAD "marbles.dat" BANK #BANK_LOCAL_SETTINGS
+9343 ON ERROR : ENDPROC
+
+9380 DEFPROC getHighScores()
+9381 ON ERROR GO TO 9394
+9382 .http get -h h$ -u /6 -b b$ -7
+9383 ENDPROC =1
+9394 ENDPROC =0
 
 9400 DEFPROC loserMessage()
 9401 LOCAL %i: RANDOMIZE :%i=%( RND 5)+9402: GO TO %i
-9402 ENDPROC ="   YOU KNOW YOU CAN UNDO","  INSTEAD OF KEEP LOSING"
+9402 ENDPROC ="  YOU KNOW YOU CAN UNDO","  INSTEAD OF KEEP LOSING"
 9403 ENDPROC ="    OH. YOU BLEW IT.",""
 9404 ENDPROC ="  MY ONE LEGGED CAT GOT","A BETTER SCORE THAN THAT"
 9405 ENDPROC ="KEEP PRACTISING.","'COS YOU LOST...AGAIN..."
@@ -1381,18 +1398,18 @@ DATA %3,%6,%94,%95,%84,%85,%74,%75,%64,%65,%54,%55,%44,%45,%34,%35,%24,%25,%14,%
 9407 ENDPROC ="    I DIDNT KNOW THE","    SCORE WENT THAT LOW"
 
 # generated via makefile
-9900 .extract MARBLES.BAS +28928 512 -mb 15 : ; pal
-9901 .extract MARBLES.BAS +29440 1536 -mb 29 : ; font
-9902 .extract MARBLES.BAS +30976 15232 -mb 22 : ; gfx A
-9903 .extract MARBLES.BAS +46208 15232 -mb 23 : ; gfx B
-9904 .extract MARBLES.BAS +61440 8320 -mb 28 : ; gfx C
-9905 .extract MARBLES.BAS +69760 1278 -mb 20 : ; lib
-9906 .extract MARBLES.BAS +71038 16384 -mb 16 : ; sprites
-9907 .extract MARBLES.BAS +87422 515 -mb 24 : ; fx
+9900 .extract MARBLES.BAS +29184 512 -mb 15 : ; pal
+9901 .extract MARBLES.BAS +29696 1536 -mb 29 : ; font
+9902 .extract MARBLES.BAS +31232 15232 -mb 22 : ; gfx A
+9903 .extract MARBLES.BAS +46464 15232 -mb 23 : ; gfx B
+9904 .extract MARBLES.BAS +61696 8320 -mb 28 : ; gfx C
+9905 .extract MARBLES.BAS +70016 1278 -mb 20 : ; lib
+9906 .extract MARBLES.BAS +71294 16384 -mb 16 : ; sprites
+9907 .extract MARBLES.BAS +87678 515 -mb 24 : ; fx
 9909 ON ERROR GO TO 9911
-9910 .extract MARBLES.BAS +137089 5968 -o /dot/http : ; .http
+9910 .extract MARBLES.BAS +137345 5968 -o /dot/http : ; .http
 9911 ON ERROR GO TO 9913
-9912 .extract MARBLES.BAS +143057 572 -o /nextzxos/ayfx.drv : ; ayfx.drv
+9912 .extract MARBLES.BAS +143313 572 -o /nextzxos/ayfx.drv : ; ayfx.drv
 9913 ON ERROR GO TO 9915
-9914 .extract MARBLES.BAS +143629 578 -o /nextzxos/input.drv : ; input.drv
+9914 .extract MARBLES.BAS +143885 578 -o /nextzxos/input.drv : ; input.drv
 9990 ON ERROR : RETURN
