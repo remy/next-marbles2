@@ -10,6 +10,7 @@
 ; s$   - temp printed string
 ; %a[] - collection of blocks
 ; %c() - palette rotation colours
+; m$   - my name
 ;
 ;-------------------------------------------------------------------------------
 
@@ -37,6 +38,7 @@ RESTORE
 #define BANK_UNDO=27
 #define BANK_FONTS=29
 #define BANK_CUSTOM_THEME=21
+#define BANK_LOCAL_SCORES=30
 
 # set debug bank to non zero to load predefined sequence
 #define BANKDEBUG=0
@@ -118,12 +120,14 @@ RANDOMIZE
 %p(#UNDO_PTR)=0
 %p(#SOUND)=1
 
+; m$ = me
+LET m$="   "
+
 ; palette rotation
 %c(0)=%$cf: ; mint
 %c(1)=%$38: ; green
 %c(2)=%$87: ; dark purple
 %c(3)=%$3f: ; cyan
-
 
 h$="data.remysharp.com"
 
@@ -290,7 +294,7 @@ DEFPROC mainMenu()
     k$= INKEY$
     IF k$="1" THEN start=1
     IF k$="2" THEN PROC showHighScores()
-    IF k$="4" THEN PROC settingsMenu()
+    IF k$="3" THEN PROC settingsMenu()
 ;     IF (k$ > "3") THEN : ELSE : PROC showHighScores(): PROC setSeed(%p(#SEED)):start=1: ELSE PROC printMainMenuOptions()
   REPEAT UNTIL start=1
 
@@ -303,16 +307,16 @@ DEFPROC printMainMenuOptions()
 
   DIM j$(4,18)
   j$(1)="1. Free play"
-  j$(2)="2. Challenge"
-  j$(3)="3. Highscores"
-  j$(4)="4. Settings"
+  j$(2)="2. Highscores"
+  j$(3)="3. Settings"
+  j$(4)="4. About"
 
   LAYER 1,1
   INK 2
   PRINT POINT 72,%(1*12)+105;"1. Free play"
-  PRINT POINT 72,%(2*12)+105;"2. Challenge"
-  PRINT POINT 72,%(3*12)+105;"3. Highscores"
-  PRINT POINT 72,%(4*12)+105;"4. Settings"
+  PRINT POINT 72,%(2*12)+105;"2. Highscores"
+  PRINT POINT 72,%(3*12)+105;"3. Settings"
+  PRINT POINT 72,%(4*12)+105;"4. About"
 
 ENDPROC
 
@@ -335,38 +339,112 @@ ENDPROC
 
 DEFPROC showHighScores()
   PROC clearL2Menu()
-  b$= STR$ #BANK_REMOTE_SCORES
-  ON ERROR ENDPROC : ; fixme - do some kind of error handling
-  PROC getHighScores() TO %i
-  IF %i THEN PROC renderHighScores():start=1
-  IF %i=0 THEN PRINT "it failed"
+  LOCAL %b
+
+  %w=1
+
+  REPEAT
+    PROC printLayer()
+    CLS
+    PAPER 1
+    INK 2
+
+    IF %w THEN PROC getHighScores() TO %b: IF %b THEN %b=#BANK_REMOTE_SCORES
+    IF %w=0 THEN %b=#BANK_LOCAL_SCORES
+
+    IF %w THEN PRINT AT 5,7;"WORLD LEADERBOARD": ELSE : PRINT AT 5,10;"MY LEADERBOARD"
+
+    ; print the bottom menu
+    LAYER 2,1
+    IF %b <> 0 THEN PRINT AT 19,11; INK 255;"C"; INK 50;"hallenge"; : PROC underline(20,11)
+
+    IF %w THEN PRINT AT 19,5; INK 255;"M"; INK 50;"ine ": ELSE : PRINT AT 19,5; INK 255;"W"; INK 50;"orld";
+    PROC underline(20,5)
+    PRINT AT 19,23; INK 255;"B"; INK 50;"ack";
+    PROC underline(20,23)
+
+    PROC printLayer()
+    IF %b THEN PROC renderLeaderBoard(%b): ELSE PROC renderCannotLoadWeb()
+    LAYER 2,1
+
+    REPEAT
+      k$= INKEY$
+    REPEAT UNTIL k$="b" OR k$="c" OR k$="w" OR k$="m"
+    PROC untilKeyUp()
+    IF k$="w" THEN %w=1
+    IF k$="m" THEN %w=0
+
+    LET exit=0
+    IF k$="b" THEN exit=1
+    IF k$="c" THEN IF %b THEN exit=1
+  REPEAT UNTIL exit
+
+
+  IF k$="c" THEN PROC selectChallenge(): ENDPROC
+
+  LAYER 1,1: CLS
+  PROC clearL2Menu()
+  PROC printMainMenuOptions()
+ENDPROC
+
+DEFPROC renderCannotLoadWeb()
+  PROC font(1,4)
+  PRINT AT 8,10;"I'm afraid I can't access the web right now"
+  PRINT AT 9,10;"to show you what hugely impressive scores"
+  PRINT AT 10,10;"the world leaders in Marbles Squared have"
+  PRINT AT 11,10;"achieved."
+  PRINT AT 13,10;"But that would probably just you feel bad"
+  PRINT AT 14,10;"about yourself anyway."
+  PRINT AT 16,10;"I guess you can still play with yourself?"
+
+  PROC font(0,8)
+ENDPROC
+
+DEFPROC selectChallenge()
+  ; wait loop
+  PRINT AT 19,4;"Use cursors keys & enter"
+  ; remove the underlines
+  PRINT AT 20,5;" "
+  PRINT AT 20,11;" "
+  PRINT AT 20,23;" "
+
+  LOCAL %i: LOCAL %j: LOCAL %k
+
+  ; clears the flash attribute for the current line
+  %i=0
+  %j=%((i+7)*32)+6144
+  FOR %k=%(j+4) TO %(j+26)
+    %l=% BANK 5 PEEK k
+    BANK 5 POKE %k,%(l^128)
+  NEXT %k
+
+  REPEAT
+    k$= INKEY$
+    %c= CODE k$
+    IF %(c >= 9) AND (c <= 11) THEN PROC highlight(%c,%i) TO %i
+  REPEAT UNTIL %c=13
+
+  %p(#SEED)=% BANK #BANK_REMOTE_SCORES DPEEK ((i*7)+3): ; seed
+
+  start=1
 
 ENDPROC
 
-DEFPROC renderHighScores()
-
+DEFPROC renderLeaderBoard(%b)
   LOCAL %i: ; memory peek position
   LOCAL %j: ; screen print offset
   LOCAL %k: ; high score position (1..10)
   LOCAL %l: ; whether to print inverted
-  PROC printLayer()
-
-  CLS
-
-  PAPER 1
-  INK 2
-  PRINT AT 5,11;"HIGH SCORES"
-
   %i=0
   %k=1
   %j=1
-  REPEAT
-    WHILE % BANK #BANK_REMOTE_SCORES PEEK i <> 0
 
-    n$= BANK #BANK_REMOTE_SCORES PEEK$ (%i,3)
-    %j=% BANK #BANK_REMOTE_SCORES DPEEK (i+3): ; seed
+  REPEAT
+    WHILE % BANK b PEEK i <> 0
+    n$= BANK %b PEEK$ (%i,3)
+    %j=% BANK b DPEEK (i+3): ; seed
     PROC toHex(%j) TO s$
-    %s=% BANK #BANK_REMOTE_SCORES DPEEK (i+5): ; score
+    %s=% BANK b DPEEK (i+5): ; score
 
     %i=%i+7
 
@@ -383,37 +461,6 @@ DEFPROC renderHighScores()
     %k=%k+1
 
   REPEAT UNTIL %i=0
-
-  LAYER 2,1
-
-  PRINT AT 19,7; INK 50;"Challenge? "; INK 255;"Y"; INK 50;"es/No"
-  PROC underline(20,18)
-
-  REPEAT
-    k$= INKEY$
-  REPEAT UNTIL k$="y" OR k$="n" OR ( CODE k$)=13
-  REPEAT : REPEAT UNTIL INKEY$ =""
-
-  IF k$="n" THEN PRINT AT 20,18;" ": PROC underline(20,22): PRINT AT 19,18; INK 50;"Yes/"; INK 255;"N"; INK 50;"o": ENDPROC
-
-  ; wait loop
-  PRINT AT 19,4;"Use cursors keys & enter"
-  PRINT AT 20,18;" "
-
-  %i=0
-  %j=%((i+7)*32)+6144
-  FOR %k=%(j+4) TO %(j+26)
-    %l=% BANK 5 PEEK k
-    BANK 5 POKE %k,%(l^128)
-  NEXT %k
-
-  REPEAT
-    k$= INKEY$
-    %c= CODE k$
-    IF %(c >= 9) AND (c <= 11) THEN PROC highlight(%c,%i) TO %i
-  REPEAT UNTIL %c=13
-
-  %p(#SEED)=% BANK #BANK_REMOTE_SCORES DPEEK ((i*7)+3): ; seed
 ENDPROC
 
 DEFPROC gameLayer()
@@ -451,8 +498,11 @@ DEFPROC highlight(%c,%i)
 ENDPROC =%i
 
 DEFPROC saveHighScore()
-  BANK #BANK_LOCAL_SETTINGS DPOKE 10,%p(#SCORE)
-  BANK #BANK_LOCAL_SETTINGS DPOKE 12,%p(#SEED)
+  ; TODO prompt for name
+  m$="REM"
+  BANK #BANK_LOCAL_SETTINGS POKE 10,m$
+  BANK #BANK_LOCAL_SETTINGS DPOKE 13,%p(#SEED)
+  BANK #BANK_LOCAL_SETTINGS DPOKE 15,%p(#SCORE)
 
   ; TODO manage high score table
   SAVE "marbles.dat" BANK #BANK_LOCAL_SETTINGS,0,46
@@ -463,7 +513,10 @@ DEFPROC restoreSettings()
   %p(#THEME)=% BANK #BANK_LOCAL_SETTINGS PEEK 1
   %p(#SOUND)=% BANK #BANK_LOCAL_SETTINGS PEEK 2
   ; added space for reserved values
-  %p(#BEST)=% BANK #BANK_LOCAL_SETTINGS DPEEK 10
+  %p(#BEST)=% BANK #BANK_LOCAL_SETTINGS DPEEK 21
+
+  ; copy high scores to local leader board for ease of use
+  BANK #BANK_LOCAL_SETTINGS COPY 16,70 TO #BANK_LOCAL_SCORES,0
 ENDPROC
 
 DEFPROC underline(%y,%x)
@@ -817,9 +870,6 @@ DEFPROC gameOver()
 
   BANK #BANKGFX_C LAYER #OFFSET_CONTROLS_ALT TO 21,13,11,8
 
-  n$="REM"
-  BANK #BANKPLOT POKE %p(#PLOTPTR),n$
-  %p(#PLOTPTR)=%p(#PLOTPTR)+3
   %p(#BUSY)=1
 
   ; play a gameover sound depending on their highscore
@@ -871,13 +921,15 @@ DEFPROC pointerStatus(%i)
 ENDPROC
 
 DEFPROC postHighScore()
-  ; TODO prompt for name - limit 3
+
+  BANK #BANKPLOT POKE %p(#PLOTPTR),m$
+  %p(#PLOTPTR)=%p(#PLOTPTR)+3
+
   l=%p(#PLOTPTR)
   l$= STR$ l
   b$= STR$ #BANKPLOT
 
   ON ERROR ENDPROC
-
   ; post to data.remysharp.com/6 - flash with white and base64 encode
   .http post -b b$ -l l$ -h h$ -u /6 -v 7 -7
 ENDPROC
@@ -1011,16 +1063,17 @@ DEFPROC newGame()
 
   PROC toHex(%s) TO s$
 
-  BANK #BANKGFX_A LAYER #OFFSET_NEW_GAME_BOX TO 3,9,15,6
+  BANK #BANKGFX_A LAYER #OFFSET_NEW_GAME_BOX TO 5,9,15,6
   INK 252: ; priority black
   PAPER 250: ; light grey background
   PRINT CHR$ 29;1; CHR$ 28;1; : ; turn on big
-  PRINT AT 12,6;s$; CHR$ 138
+  PRINT AT 12,8;s$; CHR$ 138
 
   %i=0
   ; wait until the key is clear
   REPEAT : REPEAT UNTIL INKEY$ =""
-  %j=14: ; %j is the character print offset on the X axis (max: 14, min: 6 - char width: 2)
+  %j=16: ; %j is the character print offset on the X axis (max: 14, min: 6 - char width: 2)
+  %m=8
   c$=s$
   REPEAT
     i$= INKEY$
@@ -1028,7 +1081,7 @@ DEFPROC newGame()
     %c= CODE i$
     ; del key
     IF %c=12 THEN PRINT AT 12,%j;" ":%j=%j-2
-    IF %j < 6 THEN %j=6
+    IF %j < m THEN %j=%m
     IF %c=12 THEN j=%j:c$=c$(1 TO ((j/2)-3)): ; adjust the string if we deleted
 
     PROC tryToPrintChr()
@@ -1041,7 +1094,7 @@ DEFPROC newGame()
   REPEAT UNTIL %c=13: ; return key
 
   ; clear the area that had the seed entry box
-  LAYER ERASE 24,72,120,48
+  LAYER ERASE 40,72,120,48
 
   ; reset font sizes
   PRINT CHR$ 29;0; CHR$ 28;0; : ; turn off big
@@ -1061,7 +1114,7 @@ DEFPROC tryToPrintChr()
 
   IF (c$="000") AND (i$="0") THEN ENDPROC : ; prevent 0000
 
-  IF %j=14 THEN ENDPROC : ; no room left
+  IF %j=16 THEN ENDPROC : ; no room left
   c=%c
   INK 252
   PRINT AT 12,%j; CHR$ c
@@ -1383,10 +1436,11 @@ DATA %3,%6,%94,%95,%84,%85,%74,%75,%64,%65,%54,%55,%44,%45,%34,%35,%24,%25,%14,%
 9343 ON ERROR : ENDPROC
 
 9380 DEFPROC getHighScores()
-9381 ON ERROR GO TO 9394
-9382 .http get -h h$ -u /6 -b b$ -7
-9383 ENDPROC =1
-9394 ENDPROC =0
+9381 LET b$= STR$ #BANK_REMOTE_SCORES
+9382 ON ERROR GO TO 9395
+9383 .http get -h h$ -u /6 -b b$ -7
+9384 ENDPROC =1
+9395 ENDPROC =0
 
 9400 DEFPROC loserMessage()
 9401 LOCAL %i: RANDOMIZE :%i=%( RND 5)+9402: GO TO %i
