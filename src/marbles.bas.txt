@@ -14,9 +14,11 @@
 ;
 ;-------------------------------------------------------------------------------
 
+TESTING=1
+IF TESTING THEN .installassets/Profile.drv: DRIVER CODE "%",0,0
+
 RUN AT 3
 
-TESTING=1
 BORDER 0: PAPER 0: CLS
 ON ERROR GO TO 9200
 
@@ -72,6 +74,7 @@ RESTORE
 #define OFFSET_ALERT_M=6528
 #define OFFSET_ALERT_B=7424
 #define OFFSET_ZEROS=512
+#define OFFSET_HIGHSCORE=8320
 
 ; entry points in the marbles.bin library for methods and method constants
 #define M_CANMOVE=432
@@ -135,7 +138,7 @@ PROC reset()
 PROC loadAssets()
 
 ; testing screens
-; PROC installInput()
+PROC installInput()
 ; PROC showHighScores()
 ; PROC debugStop()
 ; PROC testMenus()
@@ -149,65 +152,55 @@ PROC gameLoop()
 
 PAUSE 0
 
-DEFPROC testMenus()
-  PROC settingsMenu()
-  PROC debugStop()
+DEFPROC readInput()
+  i$= INKEY$
+  IF %p(#DEVICE)=#MOUSE THEN PROC readMouse(): ELSE PROC readJoystick()
 ENDPROC
 
-DEFPROC testLoadBanks()
-  ; used in testing
-  LOAD "assets/marbles.pal" BANK #BANKPAL,0,512
-  LOAD "assets/font-computing-60s.bin" BANK #BANK_FONTS,0,768
-  LOAD "assets/font-coal.bin" BANK #BANK_FONTS,768,768
-  LOAD "assets/controls.nxi" BANK #BANKGFX_A,#OFFSET_CONTROLS,5632: ; 88w
-  LOAD "assets/new-game.nxi" BANK #BANKGFX_A,#OFFSET_NEW_GAME_BOX,5760: ; 120w
-  LOAD "assets/next-level-small.nxi" BANK #BANKGFX_A,#OFFSET_NEXT_LEVEL,3840: ; 80w
-  LOAD "assets/game-over.nxi" BANK #BANKGFX_B,#OFFSET_GAME_OVER,2560: ; 160w
-  LOAD "assets/title.nxi" BANK #BANKGFX_B,#OFFSET_TITLE,12672: ; 176w
-  LOAD "assets/controls-alt.nxi" BANK #BANKGFX_C,#OFFSET_CONTROLS_ALT,5632: ; 88w
-  LOAD "assets/alert.nxi" BANK #BANKGFX_C,#OFFSET_ALERT,2688: ; 112w (3 rows of 8px)
-
-  ; marbles library
-  LOAD "assets/marbles.bin" BANK #BANKLIB
-  LOAD "assets/marbles.spr" BANK #BANKSPR
-
-  ; audio
-  LOAD "assets/marbles.afb" BANK #BANK_FX
-
+DEFPROC readMouse()
+  DRIVER 126,1 TO %b,%x,%y
+  SPRITE #POINTER,%x/2,%y,,,
+  IF %b&@111 THEN PROC select()
 ENDPROC
 
-DEFPROC testNumbers()
-  PROC startGame(%p(#SEED))
-  %p(#SCORE)=62345
-  PROC nextLevel()
-  PROC debugStop()
+DEFPROC readJoystick()
+  ; note the REM below *must* be kept for the joystick driver to work
+  DRIVER 125,4,1
+  REM 12345678901234567890123456789012345678901234567890
 ENDPROC
 
-DEFPROC testMarlbesClear()
-  PROC startGame(%p(#SEED))
-  SPRITE PRINT 0
-  FOR %j=0 TO 99
-    PROC toXY(%j) TO %x,%y
-    TILE 1,1 AT 0,1 TO %x,%(y+1)
-  NEXT %j
-  TILE 10,10 AT 0,4 TO 0,1
-  PROC debugStop()
+##########################################
+# Joystick 1 callback procedures
+# - MUST use these exactly procedure names
+##########################################
+DEFPROC U1()
+  LOCAL %y
+  %y=% SPRITE AT (#POINTER,1)
+  IF %y > 1 THEN SPRITE #POINTER,,%y-1,,,
 ENDPROC
-
-DEFPROC testGameOver()
-  PROC startGame(%p(#SEED))
-  PROC gameOver()
-  IF i$="n" THEN PROC newGame()
-  PROC onAnyKey()
-  PROC debugStop()
+DEFPROC L1()
+  LOCAL %x
+  %x=% SPRITE AT (#POINTER,0)
+  IF %x > 1 THEN SPRITE #POINTER,%x-1,,,,
 ENDPROC
-
-DEFPROC testSelectAnimation()
-  %p(#SEED)=%$9999
-  PROC startGame(%p(#SEED))
-  SPRITE #POINTER,55,68,,,
+DEFPROC D1()
+  LOCAL %y
+  %y=% SPRITE AT (#POINTER,1)
+  IF %y < (256-1) THEN SPRITE #POINTER,,%y+1,,,
+ENDPROC
+DEFPROC R1()
+  LOCAL %x
+  %x=% SPRITE AT (#POINTER,0)
+  IF %x < (320-1) THEN SPRITE #POINTER,%x+1,,,,
+ENDPROC
+DEFPROC F1()
   PROC select()
-  PROC debugStop()
+ENDPROC
+DEFPROC F2()
+; nothing
+ENDPROC
+DEFPROC F3()
+; nothing
 ENDPROC
 
 DEFPROC gameLoop()
@@ -236,6 +229,139 @@ DEFPROC gameLoop()
     PROC setGameBorder()
   REPEAT UNTIL 0
 ENDPROC
+
+DEFPROC select()
+  IF %p(#BUSY) THEN ENDPROC
+  %i=%( SPRITE OVER (#POINTER,1 TO 100)): ; which block are we over when we selected
+
+  ; colliding 0 sprite returns 128 (can't remember why though!)
+  IF %i=128 THEN %i=0
+
+  IF %i=0 THEN ENDPROC
+  IF %i > 100 THEN ENDPROC : ; out of scope
+
+  %i=%i-1
+  PROC selectBlock()
+ENDPROC
+
+; %i = selected block
+; Uses: %c, %i, %t
+; Modifies: %p
+DEFPROC selectBlock()
+  IF %p(#BUSY) THEN ENDPROC
+
+  %p(#BUSY)=1
+
+  ; load %i into tagIndex
+  BANK #BANKLIB POKE #M_TAGINDEX,%i
+  ; call Tag()
+  %t=% BANK #BANKLIB USR #M_FN_TAG
+
+  ; %t contains the address of the number of blocks tagged (which is actually static)
+  %c=% BANK #BANKLIB PEEK t
+
+  IF %c < 2 THEN %p(#BUSY)=0: ENDPROC
+
+  ; play the "clack" sound
+  PROC effect(0)
+
+  %p(#SCORE)=%p(#SCORE)+(c*(1+c))
+  %p(#LAST_CLEARED)=%c
+  %p(#BLOCKSLEFT)=%p(#BLOCKSLEFT)-c
+  BANK #BANKPLOT POKE %p(#PLOTPTR),%i: ; store the block cleared
+  %p(#PLOTPTR)=%p(#PLOTPTR)+1
+  BANK #BANKPLOT DPOKE 2,%p(#PLOTPTR)-4: ; add the count of moves to the data
+
+  IF %p(#SCORE) > p(#BEST) THEN %p(#BEST)=%p(#SCORE):%p(#GOT_HIGH_SCORE)=1
+
+  PROC captureUndo()
+
+  ; clear the tagged blocks
+
+  ; first commit them all as tiles
+  ; then add new sprites as animations over those position
+  ; fire the animation 3 times
+  ; then empty them out
+
+  %k=% BANK #BANKLIB USR #M_FN_MIXMAX
+  %a=%(k >> 8)+1: ; min sprite id
+  %b=%(k&$00FF)+1: ; max sprite id - required to disable later
+
+  %k=0
+  FOR %i=1 TO %c
+    %j=% BANK #BANKLIB PEEK (t+i)
+    %k=%j+1
+    PROC toXY(%j) TO %x,%y
+    %m=% SPRITE AT (k,2)
+    SPRITE %k,,,51,
+    TILE 1,1 AT 0,%m-p(#THEME) TO %x,%(y+1)
+    SPRITE CONTINUE %k, STOP , STOP ,51 TO 54, BIN 01100000,10,0
+  NEXT %i
+
+  ; animate the frames and then disable the sprite animation when it's done
+  SPRITE STOP
+  REPEAT
+    SPRITE MOVE
+    %i=% SPRITE AT (k,2)
+  REPEAT UNTIL %i=54
+  SPRITE RUN
+
+  ; now disable the sprites that were animating
+  SPRITE PAUSE %a TO %b
+
+  ; LAYER ERASE 0,0,80,80,0: ; breaks in cspect
+  ; so instead we'll tile the "black" tile over the area (hidden by sprites)
+  TILE 10,10 AT 0,4 TO 0,1
+
+  INK 50
+  PROC pad2(%c) TO s$
+  PRINT AT 3,21;"CLEARED ";s$;%c
+  PROC pad2(%p(#PLOTPTR)-4) TO s$
+  PRINT AT 4,21;"MOVES   ";s$;%(p(#PLOTPTR)-4)
+  PROC pad2(%p(#BLOCKSLEFT)) TO s$
+  PRINT AT 5,21;"REMAIN  ";s$;%p(#BLOCKSLEFT)
+  INK 255
+  PROC pad4(%p(#SCORE)) TO s$
+  PRINT AT 2,21;"SCORE ";s$;%p(#SCORE)
+
+  ; now full render
+  %c=100
+  REPEAT
+    %c=%c-1
+    %i=% BANK #BANKLIB PEEK c
+    IF %i < 255 THEN %i=%i+p(#THEME): ELSE %i=#EMPTY
+    SPRITE %c+1,,,%i,
+  REPEAT UNTIL %c=0
+
+  %p(#BUSY)=0
+
+  IF %( BANK #BANKLIB PEEK #M_CANMOVE)=0 THEN %p(#BUSY)=1: PAUSE 10: PROC gameOver()
+  IF %p(#BLOCKSLEFT)=0 THEN PROC nextLevel()
+
+ENDPROC
+
+DEFPROC captureUndo()
+  BANK #BANKLIB COPY 0,100 TO #BANK_UNDO,%p(#UNDO_PTR)
+  BANK #BANK_UNDO DPOKE %(p(#UNDO_PTR)+100),%p(#SCORE),%p(#BLOCKSLEFT),%p(#LAST_CLEARED)
+  %p(#UNDO_PTR)=%p(#UNDO_PTR)+106
+ENDPROC
+
+DEFPROC effect(%i)
+  IF %p(#SOUND)=0 THEN ENDPROC
+  DRIVER #DRV_FX,2,%i
+ENDPROC
+
+DEFPROC pad4(%w)
+  IF %w < 10 THEN ENDPROC ="    "
+  IF %w < 100 THEN ENDPROC ="   "
+  IF %w < 1000 THEN ENDPROC ="  "
+  IF %w < 10000 THEN ENDPROC =" "
+ENDPROC =""
+
+DEFPROC pad2(%w)
+  IF %w < 10 THEN ENDPROC ="  "
+  IF %w < 100 THEN ENDPROC =" "
+ENDPROC =""
 
 DEFPROC splash()
   PROC printLayer()
@@ -332,7 +458,7 @@ DEFPROC setGameBorder()
   LAYER 2,1
   PAPER 254: INK 255
   IF TESTING THEN LOAD "assets/welcome.nxi" LAYER
-  IF TESTING=0 THEN :.extract MARBLES.BAS +88193 49152 -mb 9 : ; welcome
+  IF TESTING=0 THEN :.extract MARBLES.BAS +89985 49152 -mb 9 : ; welcome
 
   LAYER 1,1
 ENDPROC
@@ -499,6 +625,9 @@ ENDPROC =%i
 
 DEFPROC saveHighScore()
   ; TODO prompt for name
+
+  BANK #BANKGFX_A LAYER #OFFSET_NEW_GAME_BOX TO 5,9,15,6
+
   m$="REM"
   BANK #BANK_LOCAL_SETTINGS POKE 10,m$
   BANK #BANK_LOCAL_SETTINGS DPOKE 13,%p(#SEED)
@@ -636,147 +765,9 @@ DEFPROC disableTheme()
   SPRITE 104,,,,0
 ENDPROC
 
-DEFPROC readInput()
-  i$= INKEY$
-  IF %p(#DEVICE)=#MOUSE THEN PROC readMouse(): ELSE PROC readJoystick()
-ENDPROC
-
-DEFPROC readMouse()
-  DRIVER 126,1 TO %b,%x,%y
-  SPRITE #POINTER,%x/2,%y,,,
-  IF %b&@111 THEN PROC select()
-ENDPROC
-
-DEFPROC readJoystick()
-  ; note the REM below *must* be kept for the joystick driver to work
-  DRIVER 125,4,1
-  REM 12345678901234567890123456789012345678901234567890
-ENDPROC
-
-DEFPROC select()
-  IF %p(#BUSY) THEN ENDPROC
-  %i=%( SPRITE OVER (#POINTER,1 TO 100)): ; which block are we over when we selected
-
-  ; colliding 0 sprite returns 128 (can't remember why though!)
-  IF %i=128 THEN %i=0
-
-  IF %i=0 THEN ENDPROC
-  IF %i > 100 THEN ENDPROC : ; out of scope
-
-  %i=%i-1
-  PROC selectBlock()
-ENDPROC
-
-; %i = selected block
-; Uses: %c, %i, %t
-; Modifies: %p
-DEFPROC selectBlock()
-  IF %p(#BUSY) THEN ENDPROC
-
-  %p(#BUSY)=1
-
-  ; load %i into tagIndex
-  BANK #BANKLIB POKE #M_TAGINDEX,%i
-  ; call Tag()
-  %t=% BANK #BANKLIB USR #M_FN_TAG
-
-  ; %t contains the address of the number of blocks tagged (which is actually static)
-  %c=% BANK #BANKLIB PEEK t
-
-  IF %c < 2 THEN %p(#BUSY)=0: ENDPROC
-
-  ; play the "clack" sound
-  PROC effect(0)
-
-  %p(#SCORE)=%p(#SCORE)+(c*(1+c))
-  %p(#LAST_CLEARED)=%c
-  %p(#BLOCKSLEFT)=%p(#BLOCKSLEFT)-c
-  BANK #BANKPLOT POKE %p(#PLOTPTR),%i: ; store the block cleared
-  %p(#PLOTPTR)=%p(#PLOTPTR)+1
-  BANK #BANKPLOT DPOKE 2,%p(#PLOTPTR)-4: ; add the count of moves to the data
-
-  IF %p(#SCORE) > p(#BEST) THEN %p(#BEST)=%p(#SCORE):%p(#GOT_HIGH_SCORE)=1
-
-  PROC captureUndo()
-
-  ; clear the tagged blocks
-
-  ; first commit them all as tiles
-  ; then add new sprites as animations over those position
-  ; fire the animation 3 times
-  ; then empty them out
-
-  %k=% BANK #BANKLIB USR #M_FN_MIXMAX
-  %a=%(k >> 8)+1: ; min sprite id
-  %b=%(k&$00FF)+1: ; max sprite id - required to disable later
-
-  %k=0
-  FOR %i=1 TO %c
-    %j=% BANK #BANKLIB PEEK (t+i)
-    %k=%j+1
-    PROC toXY(%j) TO %x,%y
-    %m=% SPRITE AT (k,2)
-    SPRITE %k,,,51,
-    TILE 1,1 AT 0,%m-p(#THEME) TO %x,%(y+1)
-    SPRITE CONTINUE %k, STOP , STOP ,51 TO 54, BIN 01100000,10,0
-  NEXT %i
-
-  ; animate the frames and then disable the sprite animation when it's done
-  SPRITE STOP
-  REPEAT
-    SPRITE MOVE
-    %i=% SPRITE AT (k,2)
-  REPEAT UNTIL %i=54
-  SPRITE RUN
-
-  ; now disable the sprites that were animating
-  SPRITE PAUSE %a TO %b
-
-  ; LAYER ERASE 0,0,80,80,0: ; breaks in cspect
-  ; so instead we'll tile the "black" tile over the area (hidden by sprites)
-  TILE 10,10 AT 0,4 TO 0,1
-
-  INK 50
-  PROC pad2(%c) TO s$
-  PRINT AT 3,21;"CLEARED ";s$;%c
-  PROC pad2(%p(#PLOTPTR)-4) TO s$
-  PRINT AT 4,21;"MOVES   ";s$;%(p(#PLOTPTR)-4)
-  PROC pad2(%p(#BLOCKSLEFT)) TO s$
-  PRINT AT 5,21;"REMAIN  ";s$;%p(#BLOCKSLEFT)
-  INK 255
-  PROC pad4(%p(#SCORE)) TO s$
-  PRINT AT 2,21;"SCORE ";s$;%p(#SCORE)
-
-  ; now full render
-  %c=100
-  REPEAT
-    %c=%c-1
-    %i=% BANK #BANKLIB PEEK c
-    IF %i < 255 THEN %i=%i+p(#THEME): ELSE %i=#EMPTY
-    SPRITE %c+1,,,%i,
-  REPEAT UNTIL %c=0
-
-  %p(#BUSY)=0
-
-  IF %( BANK #BANKLIB PEEK #M_CANMOVE)=0 THEN %p(#BUSY)=1: PAUSE 10: PROC gameOver()
-  IF %p(#BLOCKSLEFT)=0 THEN PROC nextLevel()
-
-ENDPROC
-
-DEFPROC effect(%i)
-  IF %p(#SOUND)=0 THEN ENDPROC
-  DRIVER #DRV_FX,2,%i
-ENDPROC
-
 DEFPROC debugStop()
   REPEAT : REPEAT UNTIL INKEY$ <> ""
   STOP
-ENDPROC
-
-DEFPROC captureUndo()
-  BANK #BANKLIB COPY 0,100 TO #BANK_UNDO,%p(#UNDO_PTR)
-  BANK #BANK_UNDO DPOKE %(p(#UNDO_PTR)+100),%p(#SCORE),%p(#BLOCKSLEFT),%p(#LAST_CLEARED)
-  %p(#UNDO_PTR)=%p(#UNDO_PTR)+106
 ENDPROC
 
 DEFPROC undo()
@@ -1187,21 +1178,46 @@ DEFPROC printSeed()
   PRINT AT 9,21;"BEST  ";s$;%p(#BEST)
 ENDPROC
 
-DEFPROC pad4(%w)
-  IF %w < 10 THEN ENDPROC ="    "
-  IF %w < 100 THEN ENDPROC ="   "
-  IF %w < 1000 THEN ENDPROC ="  "
-  IF %w < 10000 THEN ENDPROC =" "
-ENDPROC =""
-
-DEFPROC pad2(%w)
-  IF %w < 10 THEN ENDPROC ="  "
-  IF %w < 100 THEN ENDPROC =" "
-ENDPROC =""
-
 DEFPROC font(%i,width)
   BANK #BANK_FONTS COPY %(i*768),768 TO 0,14848
   PRINT CHR$ 30; CHR$ width;
+ENDPROC
+
+; TODO refactor this to be more useful (or to drop to file)
+DEFPROC ShowCounts(%m)
+  LAYER 2,1: SPRITE PRINT 0: CLS : PROC font(1,4)
+  FOR %l=1 TO %m
+    DRIVER CODE ("%"),1,%l TO %c
+    IF %c > 10 THEN PRINT %l,%c
+  NEXT %l
+ENDPROC
+
+DEFPROC testMenus()
+  PROC settingsMenu()
+  PROC debugStop()
+ENDPROC
+
+DEFPROC testLoadBanks()
+  ; used in testing
+  LOAD "assets/marbles.pal" BANK #BANKPAL,0,512
+  LOAD "assets/font-computing-60s.bin" BANK #BANK_FONTS,0,768
+  LOAD "assets/font-coal.bin" BANK #BANK_FONTS,768,768
+  LOAD "assets/controls.nxi" BANK #BANKGFX_A,#OFFSET_CONTROLS,5632: ; 88w
+  LOAD "assets/new-game.nxi" BANK #BANKGFX_A,#OFFSET_NEW_GAME_BOX,5760: ; 120w
+  LOAD "assets/next-level-small.nxi" BANK #BANKGFX_A,#OFFSET_NEXT_LEVEL,3840: ; 80w
+  LOAD "assets/game-over.nxi" BANK #BANKGFX_B,#OFFSET_GAME_OVER,2560: ; 160w
+  LOAD "assets/title.nxi" BANK #BANKGFX_B,#OFFSET_TITLE,12672: ; 176w
+  LOAD "assets/controls-alt.nxi" BANK #BANKGFX_C,#OFFSET_CONTROLS_ALT,5632: ; 88w
+  LOAD "assets/alert.nxi" BANK #BANKGFX_C,#OFFSET_ALERT,2688: ; 112w (3 rows of 8px)
+  LOAD "assets/high-score.nxi" BANK #BANKGFX_C,#OFFSET_HIGHSCORE,5376: ; 96w (8 rows of 8px)
+
+  ; marbles library
+  LOAD "assets/marbles.bin" BANK #BANKLIB
+  LOAD "assets/marbles.spr" BANK #BANKSPR
+
+  ; audio
+  LOAD "assets/marbles.afb" BANK #BANK_FX
+
 ENDPROC
 
 DEFPROC extractAssets()
@@ -1306,40 +1322,6 @@ DEFPROC reset()
   CLS
 ENDPROC
 
-##########################################
-# Joystick 1 callback procedures
-# - MUST use these exactly procedure names
-##########################################
-DEFPROC U1()
-  LOCAL %y
-  %y=% SPRITE AT (#POINTER,1)
-  IF %y > 1 THEN SPRITE #POINTER,,%y-2,,,
-ENDPROC
-DEFPROC L1()
-  LOCAL %x
-  %x=% SPRITE AT (#POINTER,0)
-  IF %x > 1 THEN SPRITE #POINTER,%x-2,,,,
-ENDPROC
-DEFPROC D1()
-  LOCAL %y
-  %y=% SPRITE AT (#POINTER,1)
-  IF %y < (256-1) THEN SPRITE #POINTER,,%y+2,,,
-ENDPROC
-DEFPROC R1()
-  LOCAL %x
-  %x=% SPRITE AT (#POINTER,0)
-  IF %x < (320-1) THEN SPRITE #POINTER,%x+2,,,,
-ENDPROC
-DEFPROC F1()
-  PROC select()
-ENDPROC
-DEFPROC F2()
-; nothing
-ENDPROC
-DEFPROC F3()
-; nothing
-ENDPROC
-
 DEFPROC onAnyKey()
   REPEAT : REPEAT UNTIL INKEY$ =""
   REPEAT : REPEAT UNTIL INKEY$ <> "" OR ( IN 31=16)
@@ -1348,6 +1330,42 @@ ENDPROC
 
 DEFPROC untilKeyUp()
   REPEAT : REPEAT UNTIL INKEY$ =""
+ENDPROC
+
+
+DEFPROC testNumbers()
+  PROC startGame(%p(#SEED))
+  %p(#SCORE)=62345
+  PROC nextLevel()
+  PROC debugStop()
+ENDPROC
+
+DEFPROC testMarlbesClear()
+  PROC startGame(%p(#SEED))
+  SPRITE PRINT 0
+  FOR %j=0 TO 99
+    PROC toXY(%j) TO %x,%y
+    TILE 1,1 AT 0,1 TO %x,%(y+1)
+  NEXT %j
+  TILE 10,10 AT 0,4 TO 0,1
+  PROC debugStop()
+ENDPROC
+
+DEFPROC testGameOver()
+  PROC startGame(%p(#SEED))
+  %p(#GOT_HIGH_SCORE)=1
+  %p(#SCORE)=1234
+  PROC gameOver()
+  PROC onAnyKey()
+  PROC debugStop()
+ENDPROC
+
+DEFPROC testSelectAnimation()
+  %p(#SEED)=%$9999
+  PROC startGame(%p(#SEED))
+  SPRITE #POINTER,55,68,,,
+  PROC select()
+  PROC debugStop()
 ENDPROC
 
 ; inside out
@@ -1416,6 +1434,7 @@ DATA %3,%6,%94,%95,%84,%85,%74,%75,%64,%65,%54,%55,%44,%45,%34,%35,%24,%25,%14,%
 
 # error handling needs to be outside a proc
 9200 ERROR TO err,lin,st
+9201 PROC ShowCounts(9999): PROC onAnyKey()
 9210 e$= STR$ err
 9220 ON ERROR
 9230 LAYER 2,1
@@ -1452,18 +1471,18 @@ DATA %3,%6,%94,%95,%84,%85,%74,%75,%64,%65,%54,%55,%44,%45,%34,%35,%24,%25,%14,%
 9407 ENDPROC ="    I DIDNT KNOW THE","    SCORE WENT THAT LOW"
 
 # generated via makefile
-9900 .extract MARBLES.BAS +29184 512 -mb 15 : ; pal
-9901 .extract MARBLES.BAS +29696 1536 -mb 29 : ; font
-9902 .extract MARBLES.BAS +31232 15232 -mb 22 : ; gfx A
-9903 .extract MARBLES.BAS +46464 15232 -mb 23 : ; gfx B
-9904 .extract MARBLES.BAS +61696 8320 -mb 28 : ; gfx C
-9905 .extract MARBLES.BAS +70016 1278 -mb 20 : ; lib
-9906 .extract MARBLES.BAS +71294 16384 -mb 16 : ; sprites
-9907 .extract MARBLES.BAS +87678 515 -mb 24 : ; fx
+9900 .extract MARBLES.BAS +30976 512 -mb 15 : ; pal
+9901 .extract MARBLES.BAS +31488 1536 -mb 29 : ; font
+9902 .extract MARBLES.BAS +33024 15232 -mb 22 : ; gfx A
+9903 .extract MARBLES.BAS +48256 15232 -mb 23 : ; gfx B
+9904 .extract MARBLES.BAS +63488 8320 -mb 28 : ; gfx C
+9905 .extract MARBLES.BAS +71808 1278 -mb 20 : ; lib
+9906 .extract MARBLES.BAS +73086 16384 -mb 16 : ; sprites
+9907 .extract MARBLES.BAS +89470 515 -mb 24 : ; fx
 9909 ON ERROR GO TO 9911
-9910 .extract MARBLES.BAS +137345 5968 -o /dot/http : ; .http
+9910 .extract MARBLES.BAS +139137 5968 -o /dot/http : ; .http
 9911 ON ERROR GO TO 9913
-9912 .extract MARBLES.BAS +143313 572 -o /nextzxos/ayfx.drv : ; ayfx.drv
+9912 .extract MARBLES.BAS +145105 572 -o /nextzxos/ayfx.drv : ; ayfx.drv
 9913 ON ERROR GO TO 9915
-9914 .extract MARBLES.BAS +143885 578 -o /nextzxos/input.drv : ; input.drv
+9914 .extract MARBLES.BAS +145677 578 -o /nextzxos/input.drv : ; input.drv
 9990 ON ERROR : RETURN
