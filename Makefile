@@ -19,15 +19,17 @@ marbles.bas: src/marbles.bas.txt $(INCLUDE_FILES) Makefile
 	@echo "9903 .extract MARBLES.BAS +$$($(FILESIZE)) $$($(SIZE) src/assets/game-over.nxi src/assets/title.nxi | $(SUM)) -mb 23 : ; gfx B"
 	@cat src/assets/game-over.nxi >> marbles.bas
 	@cat src/assets/title.nxi >> marbles.bas
-	@echo "9904 .extract MARBLES.BAS +$$($(FILESIZE)) $$($(SIZE) src/assets/controls-alt.nxi src/assets/alert.nxi | $(SUM)) -mb 28 : ; gfx C"
+	@echo "9904 .extract MARBLES.BAS +$$($(FILESIZE)) $$($(SIZE) src/assets/controls-alt.nxi src/assets/alert.nxi src/assets/high-score.nxi | $(SUM)) -mb 28 : ; gfx C"
 	@cat src/assets/controls-alt.nxi >> marbles.bas
 	@cat src/assets/alert.nxi >> marbles.bas
+	@cat src/assets/high-score.nxi >> marbles.bas
 	@echo "9905 .extract MARBLES.BAS +$$($(FILESIZE)) $$($(SIZE) src/assets/marbles.bin) -mb 20 : ; lib"
 	@cat src/assets/marbles.bin >> marbles.bas
 	@echo "9906 .extract MARBLES.BAS +$$($(FILESIZE)) $$($(SIZE) src/assets/marbles.spr) -mb 16 : ; sprites"
 	@cat src/assets/marbles.spr >> marbles.bas
 	@echo "9907 .extract MARBLES.BAS +$$($(FILESIZE)) $$($(SIZE) src/assets/marbles.afb) -mb 24 : ; fx"
 	@cat src/assets/marbles.afb >> marbles.bas
+
 	@echo ".extract MARBLES.BAS +$$($(FILESIZE)) $$($(SIZE) src/assets/welcome.nxi) -mb 9 : ; welcome"
 	@cat src/assets/welcome.nxi >> marbles.bas
 
