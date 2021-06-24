@@ -1,0 +1,65 @@
+#autoline 10
+
+; TODO refactor this to be more useful (or to drop to file)
+DEFPROC ShowCounts(%m)
+  ENDPROC
+  OPEN # 4,"o>profile.log"
+  PRINT "Running to file"
+  FOR %l=1 TO %m
+    DRIVER CODE ("%"),1,%l TO %c
+    IF %c THEN PRINT #4;%l;" ";%c
+  NEXT %l
+  PRINT "closing"
+  CLOSE # 4
+ENDPROC
+
+DEFPROC testMenus()
+  PROC settingsMenu()
+  PROC debugStop()
+ENDPROC
+
+DEFPROC testFont()
+  LAYER 2,1
+  PROC font(1,5)
+
+  PRINT "A puzzle game by Remy Sharp"
+  PRINT "abcdefghijklmnopqurstuvwxyz"
+  PRINT "1234567890"
+  PRINT "ABCDEFGHIJKLMNOPQURSTUVWXYZ"
+  PROC debugStop()
+ENDPROC
+
+DEFPROC testNumbers()
+  PROC startGame(%p(#SEED))
+  %p(#SCORE)=62345
+  PROC nextLevel()
+  PROC debugStop()
+ENDPROC
+
+DEFPROC testMarlbesClear()
+  PROC startGame(%p(#SEED))
+  SPRITE PRINT 0
+  FOR %j=0 TO 99
+    PROC toXY(%j) TO %x,%y
+    TILE 1,1 AT 0,1 TO %x,%(y+1)
+  NEXT %j
+  TILE 10,10 AT 0,4 TO 0,1
+  PROC debugStop()
+ENDPROC
+
+DEFPROC testGameOver()
+  PROC startGame(%p(#SEED))
+  %p(#GOT_HIGH_SCORE)=0
+  %p(#SCORE)=4670
+  PROC gameOver()
+  PROC onAnyKey()
+  PROC debugStop()
+ENDPROC
+
+DEFPROC testSelectAnimation()
+  %p(#SEED)=%$9999
+  PROC startGame(%p(#SEED))
+  SPRITE #POINTER,55,68,,,
+  PROC select()
+  PROC debugStop()
+ENDPROC

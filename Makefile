@@ -4,14 +4,14 @@ SIZE = stat -f %z
 SUM = awk '{s+=$$0} END {print s}'
 
 marbles.bas: src/marbles.bas.txt $(INCLUDE_FILES) Makefile
-	@cat src/marbles.bas.txt | sed 's/TESTING=1/TESTING=0/' | sed 's/^\s*;.*$$//g' | txt2bas -define -o marbles.bas
+	@cat src/marbles.bas.txt | sed 's/TESTING=1/TESTING=0/' | sed 's/^[ \s\t]*;.*$$//g' | txt2bas -define -o marbles.bas
 
 	@truncate -s %256 marbles.bas
 	@echo "9900 .extract MARBLES.BAS +$$($(FILESIZE)) $$($(SIZE) src/assets/marbles.pal) -mb 15 : ; pal"
 	@cat src/assets/marbles.pal >> marbles.bas
 	@echo "9901 .extract MARBLES.BAS +$$($(FILESIZE)) $$($(SIZE) src/assets/font*.bin | $(SUM)) -mb 29 : ; font"
 	@cat src/assets/font-computing-60s.bin >> marbles.bas
-	@cat src/assets/font-coal.bin >> marbles.bas
+	@cat src/assets/font-area51.bin >> marbles.bas
 	@echo "9902 .extract MARBLES.BAS +$$($(FILESIZE)) $$($(SIZE) src/assets/controls.nxi src/assets/new-game.nxi src/assets/next-level-small.nxi | $(SUM)) -mb 22 : ; gfx A"
 	@cat src/assets/controls.nxi >> marbles.bas
 	@cat src/assets/new-game.nxi >> marbles.bas
