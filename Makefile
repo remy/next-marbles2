@@ -4,10 +4,12 @@ SIZE = stat -f %z
 SUM = awk '{s+=$$0} END {print s}'
 
 marbles.bas: src/marbles.bas.txt $(INCLUDE_FILES) Makefile
+	cat src/marbles-extra.bnk.txt | sed 's/^[ \s\t]*;.*$$//g' | txt2bas -H --define --bank -o src/marbles-extra.bnk
+
 	@cat src/marbles.bas.txt | sed 's/TESTING=1/TESTING=0/' | sed 's/^[ \s\t]*;.*$$//g' | txt2bas -define -o marbles.bas
 
 	@truncate -s %256 marbles.bas
-	@echo "9900 .extract MARBLES.BAS +$$($(FILESIZE)) $$($(SIZE) src/assets/marbles.pal) -mb 15 : ; pal"
+	@echo "9900 .extract MARBLES.BAS +$$($(FILESIZE)) $$($(SIZE) src/assets/marbles.pal) -mb 15 : PROC initialScreen() : ; pal + screen"
 	@cat src/assets/marbles.pal >> marbles.bas
 	@echo "9901 .extract MARBLES.BAS +$$($(FILESIZE)) $$($(SIZE) src/assets/font*.bin | $(SUM)) -mb 29 : ; font"
 	@cat src/assets/font-computing-60s.bin >> marbles.bas
@@ -29,6 +31,10 @@ marbles.bas: src/marbles.bas.txt $(INCLUDE_FILES) Makefile
 	@cat src/assets/marbles.spr >> marbles.bas
 	@echo "9907 .extract MARBLES.BAS +$$($(FILESIZE)) $$($(SIZE) src/assets/marbles.afb) -mb 24 : ; fx"
 	@cat src/assets/marbles.afb >> marbles.bas
+
+	# TODO increase file offset by 128
+	@echo "9908 .extract MARBLES.BAS +$$($(FILESIZE)) $$($(SIZE) src/marbles-extra.bnk) -mb 31 : ; extra fns"
+	@cat src/marbles-extra.bnk >> marbles.bas
 
 	@echo ".extract MARBLES.BAS +$$($(FILESIZE)) $$($(SIZE) src/assets/welcome.nxi) -mb 9 : ; welcome"
 	@cat src/assets/welcome.nxi >> marbles.bas

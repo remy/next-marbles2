@@ -1,0 +1,654 @@
+#bank marbles-extra.bnk
+#autoline 1,1
+
+#define BANKPAL=15
+#define BANK_ZEROS=15
+#define BANKSPR=16
+#define BANK_TILE_SPR=17
+#define BANK_TILES=18
+#define BANKPLOT=19
+#define BANKLIB=20
+#define BANKGFX_A=22
+#define BANKGFX_B=23
+#define BANKGFX_C=28
+#define BANK_FX=24
+#define BANK_REMOTE_SCORES=25
+#define BANK_LOCAL_SETTINGS=26
+#define BANK_UNDO=27
+#define BANK_FONTS=29
+#define BANK_FFFF=29
+#define BANK_CUSTOM_THEME=21
+#define BANK_LOCAL_SCORES=30
+
+# set debug bank to non zero to load predefined sequence
+#define BANKDEBUG=0
+
+#define DRV_FX=49
+#define LEVEL_UP_BONUS=250
+#define HIGH_SCORE_SIZE=8
+#define HIGH_SCORE_SIZE_MAX=80
+
+#define FONT_COMPUTING_60=0
+#define FONT_COAL=1
+
+; bank graphic offsets
+#define OFFSET_CONTROLS=0
+#define OFFSET_NEW_GAME_BOX=5632
+#define OFFSET_NEXT_LEVEL=11392
+#define OFFSET_GAME_OVER=0
+#define OFFSET_TITLE=2560
+#define OFFSET_CONTROLS_ALT=0
+#define OFFSET_ALERT=5632
+#define OFFSET_ALERT_T=5632
+#define OFFSET_ALERT_M=6528
+#define OFFSET_ALERT_B=7424
+#define OFFSET_ZEROS=512
+#define OFFSET_FFFF=1536
+#define OFFSET_HIGHSCORE=8320
+
+; entry points in the marbles.bin library for methods and method constants
+#define M_CANMOVE=432
+#define M_RANDOMSEED=434
+#define M_FN_POPULATEGRID=454
+#define M_TAGINDEX=499
+#define M_FN_TAG=498
+#define M_FN_MIXMAX=924
+
+#define POINTER=127
+#define POINTERSPR=63
+#define COUNTER=126
+#define FAKESPR=4
+
+; user state
+#define DEVICE=1
+#define SCORE=2
+#define BUSY=3
+#define BLOCKSLEFT=4
+#define BEST=5
+#define THEME=6
+#define PLOTPTR=7
+#define SEED=8
+#define LEVEL=9
+#define LOAD_PATTERN=10
+#define GOT_HIGH_SCORE=11
+#define UNDO_PTR=12
+#define LAST_CLEARED=13
+#define CUSTOM_THEME=14
+#define SOUND=15
+#define LOWEST_HIGHSCORE=16
+
+#define KEYBAORD=0
+#define JOYSTICK=1
+#define MOUSE=2
+#define NOT_SELECTED=4
+
+#define EMPTY=54
+
+DEFPROC splash()
+  PROC printLayer()
+
+  LAYER 2,1
+  LOCAL %i
+
+  ; just a little effect that makes the title text render from top and bottom
+  ; at the same time (14 > i > 4)
+  %i=13
+  BANK #BANKGFX_B LAYER %(#OFFSET_TITLE+(1408*(i-5))) TO 5,%i,22,1
+  %i=5
+  BANK #BANKGFX_B LAYER %(#OFFSET_TITLE+(1408*(i-5))) TO 5,%i,22,1
+  PAUSE 2
+  %i=12
+  BANK #BANKGFX_B LAYER %(#OFFSET_TITLE+(1408*(i-5))) TO 5,%i,22,1
+  %i=6
+  BANK #BANKGFX_B LAYER %(#OFFSET_TITLE+(1408*(i-5))) TO 5,%i,22,1
+  PAUSE 2
+  %i=11
+  BANK #BANKGFX_B LAYER %(#OFFSET_TITLE+(1408*(i-5))) TO 5,%i,22,1
+  %i=7
+  BANK #BANKGFX_B LAYER %(#OFFSET_TITLE+(1408*(i-5))) TO 5,%i,22,1
+  PAUSE 2
+  %i=10
+  BANK #BANKGFX_B LAYER %(#OFFSET_TITLE+(1408*(i-5))) TO 5,%i,22,1
+  %i=7
+  BANK #BANKGFX_B LAYER %(#OFFSET_TITLE+(1408*(i-5))) TO 5,%i,22,1
+  PAUSE 2
+  %i=9
+  BANK #BANKGFX_B LAYER %(#OFFSET_TITLE+(1408*(i-5))) TO 5,%i,22,1
+  %i=8
+  BANK #BANKGFX_B LAYER %(#OFFSET_TITLE+(1408*(i-5))) TO 5,%i,22,1
+
+  PROC font(1,5)
+  PRINT AT 16,8;"Plan ahead...or lose embarrassingly"
+  INK 50
+  PRINT AT 18,11;"A puzzle game by Remy Sharp"
+
+  PAUSE 220
+
+  BANK #BANK_ZEROS LAYER #OFFSET_ZEROS TO 5,14,22,7
+
+  PROC mainMenu()
+ENDPROC
+
+DEFPROC onAnyKey()
+  REPEAT : REPEAT UNTIL INKEY$ =""
+  REPEAT : REPEAT UNTIL INKEY$ <> "" OR ( IN 31=16)
+  REPEAT : REPEAT UNTIL INKEY$ =""
+ENDPROC
+
+DEFPROC untilKeyUp()
+  REPEAT : REPEAT UNTIL INKEY$ =""
+ENDPROC
+
+DEFPROC printLayer()
+  LAYER OVER 0
+  LAYER 1,1
+  PALETTE OVER 0
+ENDPROC
+
+DEFPROC printMainMenuOptions()
+  LAYER 2,1
+  BANK #BANKGFX_B LAYER %#OFFSET_TITLE TO 5,5,22,9
+
+  LAYER 1,1
+  INK 2
+  PRINT POINT 72,%(1*12)+105;"1. Free play"
+  PRINT POINT 72,%(2*12)+105;"2. Highscores"
+  PRINT POINT 72,%(3*12)+105;"3. Settings"
+  PRINT POINT 72,%(4*12)+105;"4. About"
+ENDPROC
+
+DEFPROC mainMenu()
+  PROC font(0,8)
+  PROC printLayer()
+  LOCAL %i
+  LET start=0
+  PROC printMainMenuOptions()
+  PROC untilKeyUp()
+
+  %i=0
+  REPEAT
+    k$= INKEY$
+    IF k$="1" THEN %p(#SEED)=%1+ RND $ffff:start=1
+    IF k$="2" THEN PROC showHighScores()
+    IF k$="3" THEN PROC settingsMenu()
+    IF k$="4" THEN PROC about()
+  REPEAT UNTIL start=1
+
+ENDPROC
+
+DEFPROC font(%i,width)
+  BANK #BANK_FONTS COPY %(i*768),768 TO 0,14848
+  POKE 23607,249
+  PRINT CHR$ 2;
+  PRINT CHR$ 31; CHR$ width;
+  PRINT CHR$ 30; CHR$ width;
+ENDPROC
+
+DEFPROC showHighScores()
+  PROC clearL2Menu()
+  LOCAL %b
+
+  %w=1
+
+  REPEAT
+    PROC printLayer()
+    CLS
+    PAPER 1
+    INK 2
+
+    IF %w THEN PROC httpGetHighScores() TO %b: IF %b THEN %b=#BANK_REMOTE_SCORES
+    IF %w=0 THEN %b=#BANK_LOCAL_SCORES
+
+    ; only show 10 highscores max - putting a null byte will stop more from being read
+    BANK %b POKE %#HIGH_SCORE_SIZE_MAX,%0
+
+    IF %w THEN PRINT AT 5,8;"WORLD LEADERBOARD": ELSE : PRINT AT 5,9;"MY HIGH SCORES"
+
+    ; print the bottom menu
+    LAYER 2,1
+    IF %b <> 0 THEN PRINT AT 19,11; INK 255;"C"; INK 50;"hallenge"; : PROC underline(20,11)
+
+    IF %w THEN PRINT AT 19,5; INK 255;"M"; INK 50;"ine ": ELSE : PRINT AT 19,5; INK 255;"W"; INK 50;"orld";
+    PROC underline(20,5)
+    PRINT AT 19,23; INK 255;"B"; INK 50;"ack";
+    PROC underline(20,23)
+
+    PROC printLayer()
+
+    %m=0
+
+    IF %b THEN PROC renderLeaderBoard(%b) TO %m: ELSE PROC renderCannotLoadWeb()
+    LAYER 2,1
+
+    REPEAT
+      k$= INKEY$
+    REPEAT UNTIL k$="b" OR k$="c" OR k$="w" OR k$="m"
+    PROC untilKeyUp()
+    IF k$="w" THEN %w=1
+    IF k$="m" THEN %w=0
+
+    LET exit=0
+    IF k$="b" THEN exit=1
+    IF k$="c" THEN IF %b THEN exit=1
+  REPEAT UNTIL exit
+
+
+  IF k$="c" THEN PROC selectChallenge(%b,%m-1): ENDPROC
+
+  LAYER 1,1: CLS
+  PROC clearL2Menu()
+  PROC printMainMenuOptions()
+ENDPROC
+
+DEFPROC clearL2Menu()
+  LAYER 2,1
+  BANK #BANK_ZEROS LAYER #OFFSET_ZEROS TO 5,4,22,9
+  BANK #BANK_ZEROS LAYER #OFFSET_ZEROS TO 5,12,22,9
+ENDPROC
+
+
+
+DEFPROC selectChallenge(%b,%m)
+  IF %b=#BANK_LOCAL_SCORES THEN %p(#SEED)=% BANK b DPEEK 4:start=1: ENDPROC
+
+  ; wait loop
+  PRINT AT 19,4;"Use cursors keys & enter"
+  ; remove the underlines
+  PRINT AT 20,5;" "
+  PRINT AT 20,11;" "
+  PRINT AT 20,23;" "
+
+  LOCAL %i: LOCAL %j: LOCAL %k
+
+  ; clears the flash attribute for the current line
+  %i=0
+  %j=%((i+7)*32)+6144
+  FOR %k=%(j+4) TO %(j+26)
+    %l=% BANK 5 PEEK k
+    BANK 5 POKE %k,%(l^128)
+  NEXT %k
+
+  REPEAT
+    k$= INKEY$
+    %c= CODE k$
+    IF %(c >= 9) AND (c <= 11) THEN PROC highlight(%c,%i,%m) TO %i
+  REPEAT UNTIL %c=13
+
+  %p(#SEED)=% BANK b DPEEK ((i*#HIGH_SCORE_SIZE)+4): ; seed
+
+  start=1
+
+ENDPROC
+
+; %c = cursor key
+; %i = current selected row
+; %m = max rows
+DEFPROC highlight(%c,%i,%m)
+
+  %j=%((i+7)*32)+6144
+  FOR %k=%(j+4) TO %(j+26)
+    %l=% BANK 5 PEEK k
+    BANK 5 POKE %k,%(l^128)
+  NEXT %k
+
+  IF %c=11 THEN IF %i > 0 THEN %i=%i-1: ; up
+  IF %c=8 THEN IF %i > 0 THEN %i=%i-1: ; left (aka up)
+  IF %c=10 THEN IF %i < m THEN %i=%i+1: ; down
+  IF %c=9 THEN IF %i < m THEN %i=%i+1: ; right (aka down)
+
+  ; invert the row
+  %j=%((i+7)*32)+6144
+  FOR %k=%(j+4) TO %(j+26)
+    %l=% BANK 5 PEEK k
+    BANK 5 POKE %k,%(l^128)
+  NEXT %k
+ENDPROC =%i
+
+DEFPROC renderMyScores(%b)
+
+  LOCAL %i
+  LOCAL %j
+  LOCAL %k
+  %i=0
+  %k=1
+  %j=1
+
+  ; make the font big
+  PRINT CHR$ 29;1; CHR$ 28;1;
+
+  ; print the first score as huge
+  n$= BANK %b PEEK$ (%i,3)
+  %j=% BANK b DPEEK (i+4)
+  %s=% BANK b DPEEK (i+6)
+
+  PROC pad4(%s) TO s$
+  PRINT AT 7,6; INK 2;n$;"  ";s$;%s
+
+  ; shrink font back, then print seed
+  PRINT CHR$ 29;0; CHR$ 28;0;
+
+  PROC toHex(%j) TO s$
+  PRINT POINT 168,72; INK 3;"#";s$
+  ; 96 is centre aligned
+
+  %i=#HIGH_SCORE_SIZE
+  REPEAT
+    WHILE % BANK b PEEK i <> 0
+    ; name[3], level[1], seed[2], score[2] (level isn't printed)
+    n$= BANK %b PEEK$ (%i,3)
+    %j=% BANK b DPEEK (i+4)
+    PROC toHex(%j) TO s$
+    %s=% BANK b DPEEK (i+6)
+
+    %i=%i+#HIGH_SCORE_SIZE
+
+    PRINT POINT %8*(6-(k/10)),%9*(8+(i/#HIGH_SCORE_SIZE));
+
+    INK 2
+    PRINT n$;
+    INK 3
+    PRINT "   #";s$;"    ";
+    PROC pad4(%s) TO s$
+    INK 2
+    PRINT s$;%s
+    %k=%k+1
+    ; only print the next 5
+  REPEAT UNTIL %k=6
+
+  ENDPROC =0
+ENDPROC
+
+DEFPROC pad4(%w)
+  IF %w < 10 THEN ENDPROC ="    "
+  IF %w < 100 THEN ENDPROC ="   "
+  IF %w < 1000 THEN ENDPROC ="  "
+  IF %w < 10000 THEN ENDPROC =" "
+ENDPROC =""
+
+DEFPROC renderLeaderBoard(%b)
+  LOCAL %i: ; memory peek position
+  IF %b=#BANK_LOCAL_SCORES THEN PROC renderMyScores(%b) TO %i: ENDPROC =%i/#HIGH_SCORE_SIZE
+
+  LOCAL %j: ; screen print offset
+  LOCAL %k: ; high score position (1..10)
+  %i=0
+  %k=1
+  %j=1
+
+  REPEAT
+    WHILE % BANK b PEEK i <> 0
+    ; name[3], level[1], seed[2], score[2] (level isn't printed)
+    n$= BANK %b PEEK$ (%i,3)
+    %j=% BANK b DPEEK (i+4)
+    PROC toHex(%j) TO s$
+    %s=% BANK b DPEEK (i+6)
+
+    %i=%i+#HIGH_SCORE_SIZE
+
+    PRINT AT %6+(i/#HIGH_SCORE_SIZE),%5-(k/10);
+    REM PRINT POINT %8*(5-(k/10)),%9*(5+(i/#HIGH_SCORE_SIZE));
+
+    PRINT %k;".";
+    INK 2
+    PRINT n$;
+    INK 3
+    PRINT "   #";s$;"    ";
+    PROC pad4(%s) TO s$
+    INK 2
+    PRINT s$;%s
+    %k=%k+1
+    ; this REPEAT UNTIL is invalid, it'll exit in the early WHILE statement above
+  REPEAT UNTIL %i=0
+ENDPROC =%i/#HIGH_SCORE_SIZE
+
+
+DEFPROC underline(%y,%x)
+  LOCAL %b
+
+  ; set the bank and adjust the Y offset
+  IF %y < 8 THEN %b=9:%y=%y*2048: ELSE : IF %y < 16 THEN %b=10:%y=%(y-8)*2048: ELSE :%b=11:%y=%(y-16)*2048
+
+  %x=%x*8
+
+  BANK %b DPOKE %y+x,%$0f0f,%$0f0f,%$0f0f,%$000f: ; 8 pixels underline
+ENDPROC
+
+; param {int} %i
+; returns {string} hex string
+; uses: %j, h$, r$, p
+DEFPROC toHex(%i)
+  LOCAL %j
+  LOCAL h$
+  LOCAL r$
+  LOCAL p
+  %j=4: ; symbols (2 bytes = 4 symbols)
+  h$="0123456789abcdef"
+  r$=""
+  REPEAT : WHILE %j <> 0
+    %j=%j-1
+    p=%(i&$f)+1
+    r$=h$(p)+r$
+    %i=%i >> 4
+  REPEAT UNTIL 0
+ENDPROC =r$
+
+DEFPROC renderCannotLoadWeb()
+  PROC font(1,5)
+  PRINT POINT 40,54;"I'm afraid I can't access the web"
+  PRINT POINT 40,65;"right now to show you what hugely"
+  PRINT POINT 40,76;"impressive scores the world leaders"
+  PRINT POINT 40,87;"in Marbles Squared have achieved."
+  PRINT POINT 40,103;"But that would probably just make"
+  PRINT POINT 40,114;"you feel bad about your ability."
+  PRINT POINT 40,130;"At least you can play with yourself."
+
+  PROC font(0,8)
+ENDPROC
+
+
+DEFPROC settingsMenu()
+  PROC clearL2Menu()
+  LAYER 2,1
+  PALETTE OVER 227
+
+  INK 255
+  PRINT AT 5,12;"Settings"
+
+  LOCAL %i: LOCAL i: LOCAL %j
+
+  DIM j$(3,15)
+  j$(1)="Keyboard (QAOP)"
+  j$(2)="Joystick"
+  j$(3)="Mouse"
+
+  DIM t$(9,15)
+  t$(1)="Diamonds"
+  t$(2)="Original"
+  t$(3)="Numberwang"
+  t$(4)="Kitchen Floor"
+  t$(5)="Next Speccy"
+  t$(6)="New Grey"
+  t$(7)="Old Spec"
+  t$(8)="No Hope"
+  t$(9)="Custom"
+
+  DIM d$(2,3)
+  d$(1)="Off": ; 0(+1) = off
+  d$(2)="On"
+
+  PRINT AT 7,5; INK 255;"S"; INK 50;"ound:"
+  PROC underline(8,5)
+  i=%p(#SOUND)
+  PRINT AT 7,12;d$(i+1)
+  PRINT AT 9,5; INK 255;"I"; INK 50;"nput:"
+  PROC underline(10,5)
+  i=%p(#DEVICE)
+  PRINT AT 9,12;j$(i+1)
+  PRINT AT 11,5; INK 255;"T"; INK 50;"heme:"
+  PROC underline(12,5)
+  PRINT AT 19,10; INK 255;"B"; INK 50;"ack & save"
+  PROC underline(20,10)
+
+  PROC pointerStatus(0)
+
+  ; turn off all sprites
+
+  SPRITE PRINT 1
+  SPRITE PALETTE 0 BANK #BANKPAL,0
+  PROC printTheme()
+
+  i=%p(#THEME)/5
+  PRINT POINT 96,103; INK 52;t$(i+1)
+
+  PROC font(1,5)
+
+  PRINT POINT 40,116; INK 50;"Want your own custom theme?"
+  PRINT POINT 40,125; INK 50;"Add THEME.SPR to the game directory"
+
+  PROC font(0,8)
+
+  IF %p(#CUSTOM_THEME) THEN %j=45: ELSE :%j=40
+
+  REPEAT
+    k$= INKEY$
+    IF k$="i" THEN %p(#DEVICE)=%((p(#DEVICE)+1) MOD 3):i=%p(#DEVICE): PRINT AT 9,12;j$(i+1)
+    IF k$="t" THEN %p(#THEME)=%(p(#THEME)+5) MOD j:i=%p(#THEME)/5: PROC printTheme(): PRINT POINT 96,103; INK 52;t$(i+1)
+    IF k$="s" THEN %p(#SOUND)=%(p(#SOUND)+1) MOD 2:i=%p(#SOUND): PRINT AT 7,12;d$(i+1)
+
+    IF k$ <> "" THEN PROC untilKeyUp()
+  REPEAT UNTIL k$="b"
+
+  k$=""
+
+  PALETTE OVER 0
+  SPRITE PRINT 0
+
+  PROC disableTheme()
+  PROC clearL2Menu()
+
+  ; save settings
+  BANK #BANK_LOCAL_SETTINGS POKE 0,%p(#DEVICE)
+  BANK #BANK_LOCAL_SETTINGS POKE 1,%p(#THEME)
+  BANK #BANK_LOCAL_SETTINGS POKE 2,%p(#SOUND)
+  REM SAVE "marbles.dat" BANK #BANK_LOCAL_SETTINGS,0,%(16+#HIGH_SCORE_SIZE_MAX)
+  SAVE "marbles.dat" BANK #BANK_LOCAL_SETTINGS,0,%(16+#HIGH_SCORE_SIZE_MAX+p(#PLOTPTR))
+
+  PROC printMainMenuOptions()
+
+ENDPROC
+
+DEFPROC pointerStatus(%i)
+  SPRITE #POINTER,,,,%i,
+ENDPROC
+
+DEFPROC printTheme()
+  ; note: this palette switch doesn't quite solve the issue when
+  IF %p(#THEME)=40 THEN SPRITE PALETTE 1: ELSE SPRITE PALETTE 0
+  SPRITE 101,%128,%117,%p(#THEME),1
+  SPRITE 102,%144,%117,%p(#THEME)+1,1
+  SPRITE 103,%160,%117,%p(#THEME)+2,1
+  SPRITE 104,%176,%117,%p(#THEME)+3,1
+ENDPROC
+
+DEFPROC disableTheme()
+  SPRITE 101,,,,0
+  SPRITE 102,,,,0
+  SPRITE 103,,,,0
+  SPRITE 104,,,,0
+ENDPROC
+
+
+DEFPROC about()
+  PROC clearL2Menu()
+  LAYER 2,1
+
+  INK 255
+  PRINT AT 5,5;"About Marbles Squared"
+
+  PRINT AT 19,19; INK 255;"C"; INK 50;"ontinue";
+  PROC underline(20,19)
+
+  LAYER 1,1
+  PROC font(1,5)
+
+  CLS
+  PRINT POINT 34,55;"The aim is to clear the board of"
+  PRINT POINT 34,65;"""marbles"" - the blocks, and reach the"
+  PRINT POINT 34,75;"highest score possible."
+  PRINT POINT 34,90;"Scoring is the number of blocks (n)"
+  PRINT POINT 34,100;"times n+1, so 2 blocks gets 6 points,"
+  PRINT POINT 34,110;"3 blocks get 12 points, and so on."
+  PRINT POINT 34,125;"Completely clearing the board gets"
+  PRINT POINT 34,135;"you a level up and a bonus 250 points."
+
+  PROC onAnyKey()
+  CLS
+  PRINT POINT 34,60;"Each game has a unique ""seed"","
+  PRINT POINT 34,70;"and once a seed is used you will see"
+  PRINT POINT 34,80;"the exact same arrangement of boards"
+  PRINT POINT 34,90;"on every level you complete."
+  PRINT POINT 34,115;"Use the highscore tables to find"
+  PRINT POINT 34,125;"a game seed and challenge an"
+  PRINT POINT 34,135;"existing highscore."
+
+  PROC onAnyKey()
+  CLS
+  PRINT POINT 34,60;"Important keyboard keys to use:"
+  PRINT POINT 34,80;"[R] rage quit and restart"
+  PRINT POINT 34,92;"[N] new game and new seed"
+  PRINT POINT 34,104;"[U] undo your dreadful mistakes"
+  PRINT POINT 34,125;"Remember to check the world"
+  PRINT POINT 34,135;"leaderboard for a *real* challenge."
+
+  PROC onAnyKey()
+
+  LAYER 2,1
+  PROC font(0,8)
+  PRINT AT 5,5;"   A brief history   "
+  LAYER 1,1
+  PROC font(1,5)
+
+  CLS
+  PRINT POINT 34,60;"Marbles Squared began as a Palm Pilot"
+  PRINT POINT 34,70;"game back in the early 2000s and"
+  PRINT POINT 34,80;"amassed some 250,000 downloads."
+  PRINT POINT 34,95;"""Squared"" simply because Remy couldn't"
+  PRINT POINT 34,105;"draw circles, and ""Marbles"" because"
+  PRINT POINT 34,115;"he had unwittingly cloned SameGame on"
+  PRINT POINT 34,125;"the Psion."
+  PROC onAnyKey()
+
+  LAYER 2,1
+  PROC font(0,8)
+  PRINT AT 5,5;"  The bits of code   "
+  LAYER 1,1
+  PROC font(1,5)
+
+  CLS
+  PRINT POINT 34,60;"This game is a hybrid NextBASIC and"
+  PRINT POINT 34,70;"assembly game - using asm for more"
+  PRINT POINT 34,80;"mathematically complicate code, all"
+  PRINT POINT 34,90;"documented and available on Github."
+
+  PRINT POINT 34,110;"Written and designed by Remy Sharp";
+  PRINT POINT 34,125;"https://remysharp.com / @rem"
+  PRINT POINT 34,135;"https://remysharp.itch.io"
+
+  PROC font(0,8)
+
+  PROC onAnyKey()
+
+  CLS
+  PROC clearL2Menu()
+  PROC printMainMenuOptions()
+
+ENDPROC
+
+#autoline
+
+9380 DEFPROC httpGetHighScores()
+9381 LET b$= STR$ #BANK_REMOTE_SCORES
+9382 ON ERROR GO TO 9395
+9383 .http get -h h$ -u /6 -b b$ -7
+9384 ON ERROR : ENDPROC =1
+9395 ON ERROR : ENDPROC =0
