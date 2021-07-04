@@ -2,6 +2,14 @@
 
 Clear the board. Get the high score. The first Spectrum Next game with an online leader board.
 
+Main features:
+
+- Almost 40,000 unique starting boards
+- Joystick, keyboard or mouse input
+- Online shared leader board
+- You can create your own custom tiles
+- Unlimited undo
+
 ## Game play
 
 The aim is to clear the board of "marbles" - the blocks, and reach the highest score possible.
@@ -27,6 +35,14 @@ Remember to check the world leader board for a *real* challenge.
 Marbles Squared began as a Palm Pilot game back in the early 2000s and amassed some 250,000 downloads.
 
 The title mixes at random between _Marbles Squared_, _Marbles²_ and _Marbles2_ - but the "Squared" was simply because Remy couldn't draw circles, and "Marbles" because he had unwittingly cloned SameGame on the Psion.
+
+## Customise the game
+
+If you want to create your own block designs you can! Add a file called `theme.spr` to the same directory `marbles.bas` runs from, and this will be automatically detected.
+
+The `theme.spr` file expects to have four 16x16 sprites in a row and uses the default layer 2 palette (which you won't be able to change).
+
+I used my own web based [sprite design tool](https://zx.remysharp.com/sprites/) to generate the sprites for the original game so you should be able to too.
 
 ## Sharing your score
 

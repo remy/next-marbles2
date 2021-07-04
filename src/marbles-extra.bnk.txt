@@ -168,6 +168,7 @@ DEFPROC mainMenu()
   %i=0
   REPEAT
     k$= INKEY$
+    IF ( IN 31=16) THEN k$="1"
     IF k$="1" THEN %p(#SEED)=%1+ RND $ffff:start=1
     IF k$="2" THEN PROC showHighScores()
     IF k$="3" THEN PROC settingsMenu()

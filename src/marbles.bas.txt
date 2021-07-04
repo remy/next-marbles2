@@ -2,6 +2,40 @@
 #autostart 1
 #program marbles
 
+REM please note, if you can't see the introduction below it means you're missing
+REM out on a lot of comments. if you donated when getting the game from itch
+REM you also get the full source code and ALL the comments that explain what the
+REM hell all these code things are. But if not, there's still some useful bits
+REM you can glean from the raw code - either way, I hope you enjoy the game.
+
+# *** INTRODUCTION ****
+# Where I've used "#" for a comment, I'm giving you, the reader, more insight.
+# When I've commented using ";" these appeared in the original source.
+#
+# This is the source comments and if you donated when downloading from the
+# itch.io web site you'll also have the PDF that explains the code structure
+# which I recommend reading first.
+#
+# This game is based on a game that I've written multiple times over the last
+# two decades for different systems, so unsuprisingly the actual game mechanics
+# were the first and "easy" part to write. The hard part was making the interface
+# and actually wiring it up the the web. I'm fairly sure this is the first
+# Spectrum game to have a *live* online leader board (though happy to be wrong!).
+#
+# This file, marbles.bas is the main entry point to the software which contains
+# all the game logic. There's a complimentary file called marbles-extra.bnk
+# containing all the logic for the non-game parts, such as the leader board, the
+# about pages, the welcome screen and so on. Though I did keep these very
+# separate, and is only called at `BANK #BANK_EXTRA_FNS PROC splash()` and once
+# the bank call returns we're in the game logic. This is the only bridge between
+# the files.
+#
+# Thanks for reading and I hope you enjoy the game, and the source.
+#
+# - Remy, July 2021.
+#
+# ------------------------------------------------------------------------------
+
 ;-------------------------------------------------------------------------------
 ; VARIABLES
 ;
@@ -148,7 +182,7 @@ LET m$="   "
 %c(2)=%$87: ; dark purple
 %c(3)=%$3f: ; cyan
 
-h$="data.remysharp.com"
+h$="data.remysharp.com": ; this is where the high scores are sent for validation
 
 PROC reset()
 PROC loadAssets()
@@ -167,8 +201,6 @@ PROC loadAssets()
 # PROC mainMenu()
 
 PROC gameLoop()
-
-PAUSE 0
 
 DEFPROC readInput()
   i$= INKEY$
@@ -622,6 +654,7 @@ DEFPROC gameOver()
     IF %j&31=0 THEN %i=%(i+1) MOD 4: PROC rotatePal(%i)
     %j=%j+1
     i$= INKEY$
+    IF ( IN 31=16) THEN i$="n"
   REPEAT UNTIL (i$="r") OR (i$="n") OR (i$="e")
 
   REG 67,% BIN 00010000 : ; re-enable palette auto increment
@@ -716,7 +749,7 @@ DEFPROC nextLevel()
   ; show Next Level box
   BANK #BANKGFX_A LAYER #OFFSET_NEXT_LEVEL TO 5,9,10,6
 
-  SPRITE #COUNTER,97,116,58,1, BIN 0,1,1
+  SPRITE #COUNTER,97,116,59,1, BIN 0,1,1
   SPRITE #COUNTER-1,97,116,62,1, BIN 0,1,1: ; put a sprite under the countdown that's solid white, just in case we hide the counter before we clear the screen
   SPRITE CONTINUE #COUNTER, STOP , STOP ,59 TO 61, BIN 01100000,60,60: ; count down effect
 
@@ -796,7 +829,7 @@ DEFPROC setGameBorder()
   LAYER 2,1
   PAPER 254: INK 255
   IF TESTING THEN LOAD "assets/welcome.nxi" LAYER
-  IF TESTING=0 THEN :.extract MARBLES.BAS +99964 49152 -mb 9 : ; welcome
+  IF TESTING=0 THEN :.extract MARBLES.BAS +100509 49152 -mb 9 : ; welcome
 
   LAYER 1,1
 ENDPROC
@@ -839,7 +872,7 @@ DEFPROC newGame()
     %i=%(i+1) MOD 2
 
     PAUSE 36
-  REPEAT UNTIL %c=13: ; return key
+  REPEAT UNTIL %c=13 OR ( IN 31=16): ; return key
 
   ; clear the area that had the seed entry box
   LAYER ERASE 40,72,120,48
@@ -1039,6 +1072,9 @@ DEFPROC loadAssets()
   PROC openSettings()
   PROC restoreSettings()
 
+  ; set the load pattern to 6 will force a data restore
+  %p(#LOAD_PATTERN)=6
+
   POKE 23658,0: ; turn off CAPS LOCK (for menu items)
 ENDPROC
 
@@ -1165,8 +1201,7 @@ DATA %3,%6,%94,%95,%84,%85,%74,%75,%64,%65,%54,%55,%44,%45,%34,%35,%24,%25,%14,%
 9342 LOAD "marbles.dat" BANK #BANK_LOCAL_SETTINGS
 9343 ON ERROR : ENDPROC
 9344 ON ERROR
-# TODO add some scores in here name[3], seed[2], score[2]
-9345 BANK #BANK_LOCAL_SETTINGS POKE 0,0,30,1,%$E8,%3
+9345 BANK #BANK_LOCAL_SETTINGS POKE 0,0,25,1,%$E8,%3
 9346 BANK #BANK_LOCAL_SETTINGS POKE 16,"REM",%1,%$99,%$99,%$E8,%3
 9349 ENDPROC
 
@@ -1197,7 +1232,7 @@ DATA %3,%6,%94,%95,%84,%85,%74,%75,%64,%65,%54,%55,%44,%45,%34,%35,%24,%25,%14,%
 9419 ENDPROC ="  I like the way","   that you try..."
 9420 ENDPROC ="  --= NO WORDS =-- ",""
 9421 ENDPROC =" You play like a","      NERF HERDER"
-9422 ENDPROC ="  Have you tried","licking the brk key"
+9422 ENDPROC ="  Have you tried","licking the BRK key"
 
 9500 DEFPROC uninstall()
 9505 ON ERROR GO TO 9515
@@ -1212,20 +1247,20 @@ DATA %3,%6,%94,%95,%84,%85,%74,%75,%64,%65,%54,%55,%44,%45,%34,%35,%24,%25,%14,%
 9550 ENDPROC
 
 # generated via makefile
-9900 .extract MARBLES.BAS +20992 512 -mb 15 : PROC initialScreen(): ; pal + screen
-9901 .extract MARBLES.BAS +21504 2304 -mb 29 : ; font
-9902 .extract MARBLES.BAS +23040 15232 -mb 22 : ; gfx A
-9903 .extract MARBLES.BAS +38272 15232 -mb 23 : ; gfx B
-9904 .extract MARBLES.BAS +53504 16384 -mb 28 : ; gfx C
-9905 .extract MARBLES.BAS +69888 1285 -mb 20 : ; lib
-9906 .extract MARBLES.BAS +71173 16384 -mb 16 : ; sprites
-9907 .extract MARBLES.BAS +87557 566 -mb 24 : ; fx
+9900 .extract MARBLES.BAS +21504 512 -mb 15 : PROC initialScreen(): ; pal + screen
+9901 .extract MARBLES.BAS +22016 2304 -mb 29 : ; font
+9902 .extract MARBLES.BAS +23552 15232 -mb 22 : ; gfx A
+9903 .extract MARBLES.BAS +38784 15232 -mb 23 : ; gfx B
+9904 .extract MARBLES.BAS +54016 16384 -mb 28 : ; gfx C
+9905 .extract MARBLES.BAS +70400 1285 -mb 20 : ; lib
+9906 .extract MARBLES.BAS +71685 16384 -mb 16 : ; sprites
+9907 .extract MARBLES.BAS +88069 566 -mb 24 : ; fx
 # TODO increase file offset by 128
-9908 .extract MARBLES.BAS +88123 11841 -mb 31 : ; extra fns
+9908 .extract MARBLES.BAS +88635 11874 -mb 31 : ; extra fns
 9909 ON ERROR GO TO 9911
-9910 .extract MARBLES.BAS +149116 5968 -o /dot/http : ; .http
+9910 .extract MARBLES.BAS +149661 5968 -o /dot/http : ; .http
 9911 ON ERROR GO TO 9913
-9912 .extract MARBLES.BAS +155084 572 -o /nextzxos/ayfx.drv : ; ayfx.drv
+9912 .extract MARBLES.BAS +155629 572 -o /nextzxos/ayfx.drv : ; ayfx.drv
 9913 ON ERROR GO TO 9915
-9914 .extract MARBLES.BAS +155656 578 -o /nextzxos/input.drv : ; input.drv
+9914 .extract MARBLES.BAS +156201 578 -o /nextzxos/input.drv : ; input.drv
 9990 ON ERROR : RETURN
