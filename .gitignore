@@ -3,3 +3,4 @@ lib/*.lst
 *.labels
 cspect_win.dat
 cspect.log
+scratch/
